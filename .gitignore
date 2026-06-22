@@ -1,0 +1,50 @@
+# ===== Node =====
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ===== React Native / Metro =====
+.metro-health-check*
+.expo/
+.expo-shared/
+web-build/
+dist/
+
+# ===== iOS =====
+ios/Pods/
+ios/build/
+*.xcworkspace
+!default.xcworkspace
+*.xcuserstate
+ios/.xcode.env.local
+DerivedData/
+
+# ===== Android =====
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+*.keystore
+!debug.keystore
+*.apk
+*.aab
+
+# ===== Env / secrets =====
+.env
+.env.*
+!.env.example
+
+# ===== Logs & temp =====
+*.log
+*.tmp
+
+# ===== Editor / OS =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ===== Test / coverage =====
+coverage/
