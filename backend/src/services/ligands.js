@@ -1,37 +1,16 @@
-// Ligand data source.
-//
-// For now: a static code list + one valid SAMPLE molecule returned for any id,
-// so Rodolfo can build and test the 3D viewer before the real pipeline exists.
-//
-// TODO (Week 3): replace with the real pipeline —
-//   1. Load the ligand code list from the provided `ligands.txt`.
-//   2. getLigand(id): fetch the CIF from RCSB
-//        https://files.rcsb.org/ligands/download/<ID>.cif
-//      then parse atoms/bonds (see cifParser, to be written) and CACHE the result.
-//   3. Map RCSB / network failures to 502 (upstream_error) / 504 (upstream_timeout).
+// Ligand data source: fetch a ligand's CIF from RCSB, parse it, and cache it.
+import { parseLigandCif } from './cifParser.js';
+import { httpError } from '../lib/errors.js';
+import { config } from '../config.js';
 
+// Curated browse list. TODO (Week 3): load real codes from the provided ligands.txt.
 const SAMPLE_CODES = ['ATP', 'HEM', 'GLC', 'NAD', 'CFF', 'BNZ', 'CO2', 'HOH'];
 
-// A real, renderable little molecule (formaldehyde, CH2O): mixed elements +
-// a double bond + single bonds — good for testing CPK colors and bond orders.
-function sampleLigand(id) {
-  return {
-    id: id.toUpperCase(),
-    name: 'Formaldehyde (SAMPLE — replace with real RCSB/CIF data)',
-    formula: 'C H2 O',
-    atoms: [
-      { id: 1, element: 'C', name: 'C1', x: 0.0, y: 0.0, z: 0.0 },
-      { id: 2, element: 'O', name: 'O1', x: 1.2, y: 0.0, z: 0.0 },
-      { id: 3, element: 'H', name: 'H1', x: -0.5, y: 0.94, z: 0.0 },
-      { id: 4, element: 'H', name: 'H2', x: -0.5, y: -0.94, z: 0.0 },
-    ],
-    bonds: [
-      { a: 1, b: 2, order: 2 },
-      { a: 1, b: 3, order: 1 },
-      { a: 1, b: 4, order: 1 },
-    ],
-  };
-}
+// In-memory parsed-ligand cache. TODO: persist to disk/Postgres so it survives
+// restarts and we stay gentle on RCSB.
+const cache = new Map();
+
+const rcsbUrl = (code) => `https://files.rcsb.org/ligands/download/${code}.cif`;
 
 export function listLigands(search = '') {
   const q = search.trim().toUpperCase();
@@ -39,8 +18,36 @@ export function listLigands(search = '') {
   return { ligands, count: ligands.length };
 }
 
-export async function getLigand(id) {
-  // Stub: always returns the sample. The real version will return null for
-  // unknown codes so the route can answer 404.
-  return sampleLigand(id);
+// `fetchImpl` and `timeoutMs` are injectable so tests run offline/deterministic.
+export async function getLigand(id, { fetchImpl = fetch, timeoutMs = config.upstreamTimeoutMs } = {}) {
+  const code = id.trim().toUpperCase();
+  if (cache.has(code)) return cache.get(code);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res;
+  try {
+    res = await fetchImpl(rcsbUrl(code), { signal: controller.signal });
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw httpError(504, 'upstream_timeout', `Timed out fetching ligand '${code}' from RCSB`);
+    }
+    throw httpError(502, 'upstream_error', `Could not reach RCSB for ligand '${code}'`);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (res.status === 404) return null; // unknown ligand -> route answers 404
+  if (!res.ok) {
+    throw httpError(502, 'upstream_error', `RCSB returned ${res.status} for ligand '${code}'`);
+  }
+
+  const ligand = parseLigandCif(await res.text(), code);
+  if (ligand.atoms.length === 0) {
+    throw httpError(502, 'upstream_error', `Could not parse ligand '${code}' from RCSB`);
+  }
+
+  cache.set(code, ligand);
+  return ligand;
 }

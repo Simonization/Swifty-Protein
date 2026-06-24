@@ -37,14 +37,17 @@ export async function buildApp(opts = {}) {
         .code(400)
         .send({ error: { code: 'validation_error', message: err.message } });
     }
-    const status = err.statusCode ?? 500;
-    if (status >= 500) request.log.error(err);
-    reply.code(status).send({
-      error: {
-        code: status >= 500 ? 'internal_error' : err.code ?? 'error',
-        message: status >= 500 ? 'Internal server error' : err.message,
-      },
-    });
+    // Expected, client-facing errors carry their own status/code/message.
+    if (err.expose && err.statusCode) {
+      return reply
+        .code(err.statusCode)
+        .send({ error: { code: err.code ?? 'error', message: err.message } });
+    }
+    // Everything else is unexpected: log it, don't leak details.
+    request.log.error(err);
+    reply
+      .code(err.statusCode ?? 500)
+      .send({ error: { code: 'internal_error', message: 'Internal server error' } });
   });
 
   app.setNotFoundHandler((request, reply) => {

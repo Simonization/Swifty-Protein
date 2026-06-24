@@ -6,6 +6,7 @@ export const config = {
   host: process.env.HOST ?? '0.0.0.0',
   jwtSecret: process.env.JWT_SECRET ?? DEV_SECRET,
   databaseUrl: process.env.DATABASE_URL ?? null,
+  upstreamTimeoutMs: Number(process.env.UPSTREAM_TIMEOUT_MS ?? 8000),
   isProd: process.env.NODE_ENV === 'production',
 };
 

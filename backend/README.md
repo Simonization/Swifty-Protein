@@ -33,15 +33,17 @@ src/
   app.js              Fastify instance: plugins, error shape, route registration
   config.js           env config
   routes/             health · auth · ligands · elements
-  services/           userStore · ligands · elements   ← swap-in points
-  lib/password.js     Argon2id hashing
+  services/           userStore · ligands · cifParser · elements
+  lib/                password (Argon2id) · errors (client-facing http errors)
+test/                 node:test suite + CIF fixtures
 ```
 
 ## Implementation status / TODO
 
 - ✅ Auth (register / login / me), JWT, Argon2id hashing
-- ✅ Ligand list + detail (returns a **sample** molecule for any id)
 - ✅ Element reference data (CPK colors, vdW radii)
+- ✅ Ligand detail — fetch CIF from RCSB, parse atoms/bonds, cache (with tests)
+- ✅ Ligand list with search (from a curated code list for now)
 - ⬜ **Week 2:** replace in-memory `userStore` with Postgres (`DATABASE_URL` ready)
-- ⬜ **Week 3:** real `getLigand` — fetch CIF from RCSB, parse atoms/bonds, cache
-- ⬜ Load real ligand codes from `ligands.txt`
+- ⬜ Load the real ligand code list from `ligands.txt`
+- ⬜ Persist the ligand cache (disk/Postgres) so it survives restarts
