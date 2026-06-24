@@ -31,11 +31,10 @@ src/
   index.js            boot + listen + graceful shutdown (closes the pool)
   app.js              Fastify instance: plugins, error shape, store init, routes
   config.js           env config
-  db/pool.js          lazy Postgres connection pool
+  db/pool.js          Postgres connection pool
   routes/             health · auth
-  services/           userStore (selector) · userStore.memory · userStore.pg
-  lib/                password (Argon2id) · errors (client-facing http errors)
-migrations/           SQL migrations (run on boot on the Postgres path)
+  services/           userStore (memory + Postgres behind one interface)
+  lib/                password (Argon2id)
 test/                 node:test auth suite (Fastify inject)
 ```
 
@@ -43,5 +42,5 @@ test/                 node:test auth suite (Fastify inject)
 
 - ✅ Auth (register / login / me), JWT, Argon2id hashing
 - ✅ Auth test suite (`npm test`)
-- ✅ Postgres-backed accounts (plain `pg` + SQL migrations); in-memory fallback for
-  local dev/tests, Postgres when `DATABASE_URL` is set
+- ✅ Postgres-backed accounts (plain `pg`, schema created on boot); in-memory
+  fallback for local dev/tests, Postgres when `DATABASE_URL` is set

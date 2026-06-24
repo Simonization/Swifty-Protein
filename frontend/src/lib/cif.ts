@@ -64,20 +64,11 @@ function parseDocument(text: string): { singles: Record<string, string>; loops: 
       const toks = tokenize(line);
       const key = toks[0];
       if (toks.length > 1) {
+        // value on the same line: _chem_comp.name "FORMALDEHYDE"
         singles[key] = toks.slice(1).join(' ');
         i++;
-      } else if (i + 1 < lines.length && lines[i + 1].trim().startsWith(';')) {
-        // multi-line text block ( ; ... ; )
-        i += 1;
-        const buf = [lines[i].trim().slice(1)];
-        i++;
-        while (i < lines.length && lines[i].trim() !== ';') {
-          buf.push(lines[i]);
-          i++;
-        }
-        i++; // skip the closing ';'
-        singles[key] = buf.join('\n').trim();
       } else if (i + 1 < lines.length) {
+        // value on the following line
         singles[key] = tokenize(lines[i + 1].trim()).join(' ');
         i += 2;
       } else {

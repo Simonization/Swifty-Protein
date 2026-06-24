@@ -36,13 +36,7 @@ export async function buildApp(opts = {}) {
         .code(400)
         .send({ error: { code: 'validation_error', message: err.message } });
     }
-    // Expected, client-facing errors carry their own status/code/message.
-    if (err.expose && err.statusCode) {
-      return reply
-        .code(err.statusCode)
-        .send({ error: { code: err.code ?? 'error', message: err.message } });
-    }
-    // Everything else is unexpected: log it, don't leak details.
+    // Anything else is unexpected: log it, don't leak details.
     request.log.error(err);
     reply
       .code(err.statusCode ?? 500)
