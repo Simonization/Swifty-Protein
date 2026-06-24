@@ -1,6 +1,8 @@
 # Swifty-Proteins backend
 
-Fastify API for the Swifty-Proteins app. Implements the [API contract](../API.md).
+**Auth-only** Fastify API for the Swifty-Proteins app. Implements the
+[API contract](../API.md). The ligand pipeline (RCSB fetch + CIF parsing) lives in
+the app, not here — see `frontend/src/lib/`.
 
 ## Run locally (without Docker)
 
@@ -16,13 +18,10 @@ Or via Docker from the repo root: `make up`.
 
 ```bash
 curl localhost:3000/health
-curl -X POST localhost:3000/api/v1/auth/register \
+TOKEN=$(curl -s -X POST localhost:3000/api/v1/auth/register \
   -H 'content-type: application/json' \
-  -d '{"username":"rodolfo","password":"supersecret"}'
-# copy the token from the response:
-curl localhost:3000/api/v1/ligands -H 'authorization: Bearer <token>'
-curl localhost:3000/api/v1/ligands/ATP -H 'authorization: Bearer <token>'
-curl localhost:3000/api/v1/elements/O
+  -d '{"username":"rodolfo","password":"supersecret"}' | jq -r .token)
+curl localhost:3000/api/v1/auth/me -H "authorization: Bearer $TOKEN"
 ```
 
 ## Layout
@@ -32,18 +31,16 @@ src/
   index.js            boot + listen + graceful shutdown
   app.js              Fastify instance: plugins, error shape, route registration
   config.js           env config
-  routes/             health · auth · ligands · elements
-  services/           userStore · ligands · cifParser · elements
+  routes/             health · auth
+  services/           userStore
   lib/                password (Argon2id) · errors (client-facing http errors)
-test/                 node:test suite + CIF fixtures
+test/                 node:test auth suite (Fastify inject)
 ```
 
 ## Implementation status / TODO
 
 - ✅ Auth (register / login / me), JWT, Argon2id hashing
-- ✅ Element reference data (CPK colors, vdW radii)
-- ✅ Ligand detail — fetch CIF from RCSB, parse atoms/bonds, cache (with tests)
-- ✅ Ligand list with search (from a curated code list for now)
-- ⬜ **Week 2:** replace in-memory `userStore` with Postgres (`DATABASE_URL` ready)
-- ⬜ Load the real ligand code list from `ligands.txt`
-- ⬜ Persist the ligand cache (disk/Postgres) so it survives restarts
+- ✅ Auth test suite (`npm test`)
+- ⬜ Replace in-memory `userStore` with Postgres (`DATABASE_URL` ready); accounts
+  must persist now that auth is the backend's only job
+- ⬜ Choose DB access (plain `pg` + SQL migrations vs Prisma) — see the plan

@@ -13,7 +13,9 @@ make up       # starts the backend API + database in containers
 ```
 
 Then install **`dist/app-release.apk`** on an Android phone (or emulator) and
-launch it. The app talks to the backend running on your machine.
+launch it. The app uses the backend **only for login** (accounts); molecule data
+is fetched live from the RCSB Protein Data Bank, so viewing ligands needs internet
+access but does not depend on the backend.
 
 ---
 
@@ -21,8 +23,9 @@ launch it. The app talks to the backend running on your machine.
 
 | Requirement | Notes |
 |---|---|
-| **Docker + Docker Compose v2** | The only requirement to *run* the project. |
+| **Docker + Docker Compose v2** | The only requirement to *run* the backend. |
 | **Android device or emulator** | The app is a phone app; it cannot run inside Docker. |
+| **Internet access** | The app fetches molecule data live from RCSB (previously viewed ligands are cached for offline). |
 
 `make doctor` verifies both and prints install links for your OS if anything is
 missing.

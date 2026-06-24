@@ -7,12 +7,31 @@ info, rotation, multiple render modes, and sharing.
 
 > Stack: **React Native**. (Not Swift / Kotlin — single shared codebase for iOS & Android.)
 
+## Architecture
+
+The app owns the ligand pipeline; the backend is **auth-only**. This keeps the
+subject's mobile learning objectives — Network Programming and File Parsing — in
+the app, and means the core feature (viewing molecules) works even if the backend
+is unreachable.
+
+- **RN app** → fetches `.cif` directly from RCSB (`/ligands/view/{id}.cif`), parses
+  in-app (`frontend/src/lib/`), renders 3D, handles biometric login + foreground re-lock.
+- **Backend (Fastify)** → accounts only: register / login / me, JWT, Argon2id, Postgres.
+- See [`API.md`](API.md) for the contract and the rationale in
+  [the architecture plan](.claude/plans/now-one-overview-agent-functional-cat.md).
+
+**Ownership:** Simon authors and defends the *shared core* (CIF parser, RCSB fetch,
+types, element data — they run in the app but are Simon's modules). Rodolfo authors
+the app UI, the 3D viewer, and the auth/biometric flow, and consumes the shared core
+through its typed API. Per `protein.md` Ch. III, each of us must still be able to
+explain any part at defense.
+
 ## Team & responsibilities
 
 | Person | Role | Scope |
 |--------|------|-------|
-| **Rodolfo** | Frontend | React Native app: navigation, auth/biometric screens, ligand list, 3D molecule viewer, sharing, UI polish |
-| **Simon** | Backend | API server: authentication, ligand data fetching / parsing / caching, atom metadata, persistence, deployment |
+| **Rodolfo** | Frontend (app craft) | RN app: navigation, auth/biometric screens, foreground re-lock, ligand list + search, **3D molecule viewer**, sharing, UI polish — consumes the shared core below |
+| **Simon** | Backend + shared core | Auth API (JWT, Argon2id, Postgres), Docker/reproducibility, and the shared TS modules in `frontend/src/lib` (`cif`, `rcsb`) & `frontend/src/{data,types}` |
 
 ## Deadlines
 
