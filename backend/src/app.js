@@ -5,8 +5,6 @@ import jwt from '@fastify/jwt';
 import { config } from './config.js';
 import healthRoutes from './routes/health.js';
 import authRoutes from './routes/auth.js';
-import ligandRoutes from './routes/ligands.js';
-import elementRoutes from './routes/elements.js';
 
 // Builds and returns a configured Fastify instance (no .listen() — see index.js).
 // Exported separately so tests can spin up the app without binding a port.
@@ -56,11 +54,9 @@ export async function buildApp(opts = {}) {
     });
   });
 
-  // Routes
+  // Routes — backend is auth-only; ligand fetch/parse lives in the RN app.
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/api/v1/auth' });
-  await app.register(ligandRoutes, { prefix: '/api/v1/ligands' });
-  await app.register(elementRoutes, { prefix: '/api/v1/elements' });
 
   return app;
 }
