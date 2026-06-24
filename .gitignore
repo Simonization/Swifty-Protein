@@ -10,7 +10,9 @@ yarn-error.log*
 .expo/
 .expo-shared/
 web-build/
-dist/
+# ignore build output in dist/, but keep the folder and the shipped APK
+dist/*
+!dist/.gitkeep
 
 # ===== iOS =====
 ios/Pods/
@@ -30,6 +32,8 @@ android/local.properties
 !debug.keystore
 *.apk
 *.aab
+# ...except the deliverable APK we ship to the jury (committed on purpose)
+!dist/app-release.apk
 
 # ===== Env / secrets =====
 .env

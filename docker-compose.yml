@@ -1,0 +1,51 @@
+# =============================================================================
+# Swifty-Proteins — orchestration
+#
+#   make up    → starts db + backend   (what the jury runs)
+#   make apk   → runs apk-builder       (build profile; produces dist/app-release.apk)
+#
+# The apk-builder is behind a profile so it does NOT start on `docker compose up`.
+# =============================================================================
+
+services:
+  db:
+    image: postgres:16-alpine          # pinned for 2-year reproducibility
+    environment:
+      POSTGRES_USER: protein
+      POSTGRES_PASSWORD: protein
+      POSTGRES_DB: protein
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U protein"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://protein:protein@db:5432/protein
+      PORT: 3000
+    ports:
+      - "3000:3000"                     # RN app / device talks to host:3000
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Heavy Android build image — only runs via `make apk` (profile: build).
+  apk-builder:
+    profiles: ["build"]
+    build: ./frontend
+    volumes:
+      - ./dist:/app/dist                # APK lands in ./dist on the host
+
+volumes:
+  db-data:
