@@ -20,13 +20,13 @@ export default async function authRoutes(app) {
   app.post('/register', { schema: { body: credentialsSchema } }, async (request, reply) => {
     const { username, password } = request.body;
 
-    if (userStore.findByUsername(username)) {
+    if (await userStore.findByUsername(username)) {
       return reply
         .code(409)
         .send({ error: { code: 'username_taken', message: 'Username already registered' } });
     }
 
-    const user = userStore.createUser({ username, passwordHash: await hashPassword(password) });
+    const user = await userStore.createUser({ username, passwordHash: await hashPassword(password) });
     const token = await signToken(reply, user);
     return reply.code(201).send({ token, user: userStore.toPublic(user) });
   });
@@ -34,7 +34,7 @@ export default async function authRoutes(app) {
   // POST /api/v1/auth/login
   app.post('/login', { schema: { body: credentialsSchema } }, async (request, reply) => {
     const { username, password } = request.body;
-    const user = userStore.findByUsername(username);
+    const user = await userStore.findByUsername(username);
 
     if (!user || !(await verifyPassword(user.passwordHash, password))) {
       return reply
@@ -48,7 +48,7 @@ export default async function authRoutes(app) {
 
   // GET /api/v1/auth/me — validate token / fetch current user.
   app.get('/me', { preHandler: app.authenticate }, async (request) => {
-    const user = userStore.findById(request.user.sub);
+    const user = await userStore.findById(request.user.sub);
     return { user: userStore.toPublic(user) };
   });
 }

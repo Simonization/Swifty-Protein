@@ -1,37 +1,14 @@
-// In-memory user store — lets the API run with ZERO external dependencies so
-// Rodolfo can integrate auth on day 1.
-//
-// TODO (Week 2): swap these functions for Postgres-backed queries. Keep the
-// same signatures and the routes won't change. Data is lost on restart for now.
-import { randomUUID } from 'node:crypto';
+// User store facade: Postgres when DATABASE_URL is set (Docker / prod),
+// in-memory otherwise (local dev + tests). Both implementations share the same
+// async interface, so callers don't care which is active.
+import { config } from '../config.js';
+import * as memory from './userStore.memory.js';
+import * as postgres from './userStore.pg.js';
 
-const usersByName = new Map(); // username -> { id, username, passwordHash, createdAt }
+const impl = config.databaseUrl ? postgres : memory;
 
-export function createUser({ username, passwordHash }) {
-  const user = {
-    id: randomUUID(),
-    username,
-    passwordHash,
-    createdAt: new Date().toISOString(),
-  };
-  usersByName.set(username, user);
-  return user;
-}
-
-export function findByUsername(username) {
-  return usersByName.get(username) ?? null;
-}
-
-export function findById(id) {
-  for (const user of usersByName.values()) {
-    if (user.id === id) return user;
-  }
-  return null;
-}
-
-// Strip the password hash before sending a user over the wire.
-export function toPublic(user) {
-  if (!user) return null;
-  const { passwordHash, ...publicUser } = user;
-  return publicUser;
-}
+export const init = () => impl.init();
+export const createUser = (user) => impl.createUser(user);
+export const findByUsername = (username) => impl.findByUsername(username);
+export const findById = (id) => impl.findById(id);
+export const toPublic = (user) => impl.toPublic(user);

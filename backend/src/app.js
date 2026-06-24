@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 
 import { config } from './config.js';
+import * as userStore from './services/userStore.js';
 import healthRoutes from './routes/health.js';
 import authRoutes from './routes/auth.js';
 
@@ -53,6 +54,9 @@ export async function buildApp(opts = {}) {
       error: { code: 'not_found', message: `Route ${request.method} ${request.url} not found` },
     });
   });
+
+  // Initialise the user store (runs migrations on the Postgres path; no-op in memory).
+  await userStore.init();
 
   // Routes — backend is auth-only; ligand fetch/parse lives in the RN app.
   await app.register(healthRoutes);

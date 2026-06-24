@@ -7,12 +7,12 @@ the app, not here — see `frontend/src/lib/`.
 ## Run locally (without Docker)
 
 ```bash
-cp .env.example .env
 npm install
-npm run dev        # http://localhost:3000  (auto-reload)
+npm run dev        # http://localhost:3000 (auto-reload, in-memory accounts)
 ```
 
-Or via Docker from the repo root: `make up`.
+Accounts are in-memory unless `DATABASE_URL` is set. For Postgres-backed accounts,
+run the stack with Docker from the repo root: `make up` (compose provides the DB).
 
 ## Quick smoke test
 
@@ -28,12 +28,14 @@ curl localhost:3000/api/v1/auth/me -H "authorization: Bearer $TOKEN"
 
 ```
 src/
-  index.js            boot + listen + graceful shutdown
-  app.js              Fastify instance: plugins, error shape, route registration
+  index.js            boot + listen + graceful shutdown (closes the pool)
+  app.js              Fastify instance: plugins, error shape, store init, routes
   config.js           env config
+  db/pool.js          lazy Postgres connection pool
   routes/             health · auth
-  services/           userStore
+  services/           userStore (selector) · userStore.memory · userStore.pg
   lib/                password (Argon2id) · errors (client-facing http errors)
+migrations/           SQL migrations (run on boot on the Postgres path)
 test/                 node:test auth suite (Fastify inject)
 ```
 
@@ -41,6 +43,5 @@ test/                 node:test auth suite (Fastify inject)
 
 - ✅ Auth (register / login / me), JWT, Argon2id hashing
 - ✅ Auth test suite (`npm test`)
-- ⬜ Replace in-memory `userStore` with Postgres (`DATABASE_URL` ready); accounts
-  must persist now that auth is the backend's only job
-- ⬜ Choose DB access (plain `pg` + SQL migrations vs Prisma) — see the plan
+- ✅ Postgres-backed accounts (plain `pg` + SQL migrations); in-memory fallback for
+  local dev/tests, Postgres when `DATABASE_URL` is set
