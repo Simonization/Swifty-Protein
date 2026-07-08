@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Swifty Protein",
+    "slug": "swifty-protein",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0E17",
+    "scheme": "swiftyprotein",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Swifty Protein uses Face ID to unlock the app quickly and securely."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0E17",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A0E17",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Swifty Protein uses Face ID to unlock the app quickly and securely."
+        }
+      ]
+    ]
+  }
+}
