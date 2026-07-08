@@ -5,7 +5,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SplashScreen } from '../screens/SplashScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
-import { HomeScreen } from '../screens/HomeScreen';
+import { LigandListScreen } from '../screens/LigandListScreen';
+import { LigandViewScreen } from '../screens/LigandViewScreen';
 import { colors } from '../theme/theme';
 import { useAuth } from '../auth/AuthContext';
 import type { AuthStackParamList, AppStackParamList } from './types';
@@ -37,7 +38,8 @@ export function RootNavigator() {
         <SplashScreen />
       ) : status === 'unlocked' ? (
         <AppStack.Navigator screenOptions={{ headerShown: false }}>
-          <AppStack.Screen name="Home" component={HomeScreen} />
+          <AppStack.Screen name="LigandList" component={LigandListScreen} />
+          <AppStack.Screen name="LigandView" component={LigandViewScreen} />
         </AppStack.Navigator>
       ) : (
         <AuthStack.Navigator screenOptions={{ headerShown: false }}>

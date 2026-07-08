@@ -1,8 +1,11 @@
+import type { Ligand } from '../types';
+
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
 };
 
 export type AppStackParamList = {
-  Home: undefined;
+  LigandList: undefined;
+  LigandView: { ligand: Ligand };
 };

@@ -32,7 +32,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "jest"
+    "test": "jest",
+    "gen:ligands": "node scripts/gen-ligand-ids.js"
   },
   "jest": {
     "preset": "jest-expo",
