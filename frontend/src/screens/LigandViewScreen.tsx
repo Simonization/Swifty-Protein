@@ -5,17 +5,38 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
 
-import { MoleculeViewer, type AtomTapInfo, type MoleculeViewerHandle } from '../components/MoleculeViewer';
+import {
+  MoleculeViewer,
+  type AtomTapInfo,
+  type BondTapInfo,
+  type MeasurementInfo,
+  type MoleculeViewerHandle,
+  type ViewMode,
+} from '../components/MoleculeViewer';
 import { colors, radii, spacing, typography } from '../theme/theme';
 import { elementFor } from '../data/elements';
 import type { AppStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'LigandView'>;
 
+const MODES: { key: ViewMode; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
+  { key: 'ballStick', label: 'Ball & Stick', icon: 'chart-bubble' },
+  { key: 'spaceFilling', label: 'Space-Filling', icon: 'circle' },
+  { key: 'stick', label: 'Stick', icon: 'grid' },
+  { key: 'wireframe', label: 'Wireframe', icon: 'vector-line' },
+];
+
+const BOND_ORDER_LABEL: Record<1 | 2 | 3, string> = { 1: 'Single', 2: 'Double', 3: 'Triple' };
+
 export function LigandViewScreen({ route, navigation }: Props) {
   const { ligand } = route.params;
   const viewerRef = useRef<MoleculeViewerHandle>(null);
   const [selectedAtom, setSelectedAtom] = useState<AtomTapInfo | null>(null);
+  const [selectedBond, setSelectedBond] = useState<BondTapInfo | null>(null);
+  const [measurement, setMeasurement] = useState<MeasurementInfo | null>(null);
+  const [mode, setMode] = useState<ViewMode>('ballStick');
+  const [showLabels, setShowLabels] = useState(false);
+  const [measureMode, setMeasureMode] = useState(false);
   const [sharing, setSharing] = useState(false);
 
   const handleShare = async () => {
@@ -38,6 +59,15 @@ export function LigandViewScreen({ route, navigation }: Props) {
     } finally {
       setSharing(false);
     }
+  };
+
+  const toggleMeasureMode = () => {
+    setMeasureMode((prev) => {
+      if (prev) viewerRef.current?.clearMeasurement();
+      return !prev;
+    });
+    setSelectedAtom(null);
+    setSelectedBond(null);
   };
 
   return (
@@ -63,8 +93,51 @@ export function LigandViewScreen({ route, navigation }: Props) {
         </Pressable>
       </View>
 
+      <View style={styles.modeRow}>
+        {MODES.map((m) => (
+          <Pressable
+            key={m.key}
+            onPress={() => setMode(m.key)}
+            style={[styles.modeButton, mode === m.key && styles.modeButtonActive]}
+          >
+            <MaterialCommunityIcons
+              name={m.icon}
+              size={16}
+              color={mode === m.key ? colors.bg : colors.textMuted}
+            />
+            <Text style={[styles.modeLabel, mode === m.key && styles.modeLabelActive]}>{m.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.toolRow}>
+        <Pressable onPress={() => setShowLabels((v) => !v)} style={[styles.toolButton, showLabels && styles.toolButtonActive]}>
+          <MaterialCommunityIcons name="tag-text-outline" size={16} color={showLabels ? colors.bg : colors.textMuted} />
+          <Text style={[styles.toolLabel, showLabels && styles.toolLabelActive]}>Labels</Text>
+        </Pressable>
+        <Pressable onPress={toggleMeasureMode} style={[styles.toolButton, measureMode && styles.toolButtonActive]}>
+          <MaterialCommunityIcons name="ruler" size={16} color={measureMode ? colors.bg : colors.textMuted} />
+          <Text style={[styles.toolLabel, measureMode && styles.toolLabelActive]}>Measure</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.viewerWrap}>
-        <MoleculeViewer ref={viewerRef} ligand={ligand} onAtomTap={setSelectedAtom} />
+        <MoleculeViewer
+          ref={viewerRef}
+          ligand={ligand}
+          mode={mode}
+          showLabels={showLabels}
+          measureMode={measureMode}
+          onAtomTap={(atom) => {
+            setSelectedAtom(atom);
+            if (atom) setSelectedBond(null);
+          }}
+          onBondTap={(bond) => {
+            setSelectedBond(bond);
+            if (bond) setSelectedAtom(null);
+          }}
+          onMeasurementChange={setMeasurement}
+        />
 
         {selectedAtom && (
           <View style={styles.tooltip} pointerEvents="none">
@@ -76,12 +149,47 @@ export function LigandViewScreen({ route, navigation }: Props) {
               <Text style={styles.tooltipCoords}>
                 {selectedAtom.x.toFixed(2)}, {selectedAtom.y.toFixed(2)}, {selectedAtom.z.toFixed(2)}
               </Text>
+              <Text style={styles.tooltipCoords}>Same-element atoms highlighted</Text>
+            </View>
+          </View>
+        )}
+
+        {selectedBond && (
+          <View style={styles.tooltip} pointerEvents="none">
+            <View>
+              <Text style={styles.tooltipSymbol}>
+                {BOND_ORDER_LABEL[selectedBond.order]} bond{selectedBond.aromatic ? ' (aromatic)' : ''}
+              </Text>
+              <Text style={styles.tooltipCoords}>
+                {selectedBond.a.element}–{selectedBond.b.element} · {selectedBond.length.toFixed(2)} Å
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {measureMode && measurement && (
+          <View style={styles.tooltip} pointerEvents="none">
+            <View>
+              <Text style={styles.tooltipSymbol}>
+                {measurement.points.map((p) => p.element).join(' – ')}
+              </Text>
+              {measurement.distance != null && (
+                <Text style={styles.tooltipCoords}>Distance: {measurement.distance.toFixed(2)} Å</Text>
+              )}
+              {measurement.angleDeg != null && (
+                <Text style={styles.tooltipCoords}>Angle: {measurement.angleDeg.toFixed(1)}°</Text>
+              )}
+              {measurement.distance == null && measurement.angleDeg == null && (
+                <Text style={styles.tooltipCoords}>Tap another atom…</Text>
+              )}
             </View>
           </View>
         )}
 
         <Text style={styles.hint} pointerEvents="none">
-          Drag to rotate · pinch to zoom · two fingers to pan · tap an atom
+          {measureMode
+            ? 'Tap 2 atoms for distance, 3 for angle'
+            : 'Drag to rotate · pinch to zoom · double-tap an atom to center'}
         </Text>
       </View>
 
@@ -126,6 +234,47 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, alignItems: 'center' },
   id: { ...typography.title, color: colors.text, letterSpacing: 1.5 },
   name: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  modeRow: {
+    flexDirection: 'row',
+    gap: spacing(2),
+    paddingHorizontal: spacing(4),
+    marginBottom: spacing(2),
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing(1),
+    paddingVertical: spacing(2),
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  modeButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  modeLabel: { ...typography.caption, color: colors.textMuted, fontSize: 10 },
+  modeLabelActive: { color: colors.bg, fontWeight: '700' },
+  toolRow: {
+    flexDirection: 'row',
+    gap: spacing(2),
+    paddingHorizontal: spacing(4),
+    marginBottom: spacing(2),
+  },
+  toolButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(1),
+    paddingVertical: spacing(1.5),
+    paddingHorizontal: spacing(3),
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  toolButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  toolLabel: { ...typography.caption, color: colors.textMuted },
+  toolLabelActive: { color: colors.bg, fontWeight: '700' },
   viewerWrap: { flex: 1, marginHorizontal: spacing(4), borderRadius: radii.lg, overflow: 'hidden', position: 'relative' },
   tooltip: {
     position: 'absolute',

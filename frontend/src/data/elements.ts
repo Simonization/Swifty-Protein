@@ -1,10 +1,6 @@
 // Per-element reference data: CPK/Jmol colors + van der Waals radii (Å).
 // Bundled in the app (no network needed for colors). Covers the elements common
 // in ligands; extend as needed.
-//
-// NOTE (bonus VII.1 — dual palettes): to offer a Rasmol palette alongside Jmol,
-// add a `rasmolHex` field here (or import a full periodic-table JSON) and let the
-// renderer pick. Left single-palette for now to keep the values verified/correct.
 import type { Element } from '../types';
 
 const ELEMENTS: Element[] = [
