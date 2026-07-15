@@ -47,8 +47,15 @@ export default async function authRoutes(app) {
   });
 
   // GET /api/v1/auth/me — validate token / fetch current user.
-  app.get('/me', { preHandler: app.authenticate }, async (request) => {
+  app.get('/me', { preHandler: app.authenticate }, async (request, reply) => {
     const user = await userStore.findById(request.user.sub);
+    // The token verified, but its user is gone (deleted, or a wiped database).
+    // That is a dead session, not a successful call returning a null user.
+    if (!user) {
+      return reply
+        .code(401)
+        .send({ error: { code: 'unauthorized', message: 'Missing or invalid token' } });
+    }
     return { user: userStore.toPublic(user) };
   });
 }
