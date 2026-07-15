@@ -1,10 +1,10 @@
 # =============================================================================
 # Swifty-Proteins — orchestration
 #
-#   make up    → starts db + backend   (what the jury runs)
-#   make apk   → runs apk-builder       (build profile; produces dist/app-release.apk)
+#   make up  → starts db + backend   (what the jury runs)
 #
-# The apk-builder is behind a profile so it does NOT start on `docker compose up`.
+# The app itself is not built here: it is an Expo managed app, run on a device
+# with `npx expo start`. See JURY.md.
 # =============================================================================
 
 services:
@@ -42,13 +42,6 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
-
-  # Heavy Android build image — only runs via `make apk` (profile: build).
-  apk-builder:
-    profiles: ["build"]
-    build: ./frontend
-    volumes:
-      - ./dist:/app/dist                # APK lands in ./dist on the host
 
 volumes:
   db-data:

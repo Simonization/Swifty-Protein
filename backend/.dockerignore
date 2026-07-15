@@ -1,0 +1,13 @@
+# The Dockerfile runs `npm ci` and then `COPY . .`. Without this file a host
+# node_modules would be copied straight over that clean install -- including
+# argon2's native bindings, built for the host rather than for the image.
+node_modules
+npm-debug.log*
+
+# Never bake local env or secrets into an image.
+.env
+.env.*
+
+# Not used at runtime.
+test
+coverage

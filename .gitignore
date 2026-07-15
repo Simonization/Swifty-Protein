@@ -10,9 +10,6 @@ yarn-error.log*
 .expo/
 .expo-shared/
 web-build/
-# ignore build output in dist/, but keep the folder and the shipped APK
-dist/*
-!dist/.gitkeep
 
 # ===== iOS =====
 ios/Pods/
@@ -24,16 +21,12 @@ ios/.xcode.env.local
 DerivedData/
 
 # ===== Android =====
-android/build/
-android/app/build/
-android/.gradle/
-android/local.properties
+# `expo prebuild -p android` generates android/ locally; it is not committed.
+android/
 *.keystore
 !debug.keystore
 *.apk
 *.aab
-# ...except the deliverable APK we ship to the jury (committed on purpose)
-!dist/app-release.apk
 
 # ===== Env / secrets =====
 .env
