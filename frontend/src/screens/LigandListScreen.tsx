@@ -59,9 +59,14 @@ export function LigandListScreen({ navigation }: Props) {
           <Text style={styles.title}>Ligands</Text>
           <Text style={styles.subtitle}>{LIGAND_IDS.length} entries · RCSB PDB</Text>
         </View>
-        <Pressable onPress={() => logout()} hitSlop={8}>
-          <MaterialCommunityIcons name="logout" size={22} color={colors.textMuted} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable onPress={() => navigation.navigate('Settings')} hitSlop={8}>
+            <MaterialCommunityIcons name="cog-outline" size={22} color={colors.textMuted} />
+          </Pressable>
+          <Pressable onPress={() => logout()} hitSlop={8}>
+            <MaterialCommunityIcons name="logout" size={22} color={colors.textMuted} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchWrap}>
@@ -109,6 +114,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing(4),
     paddingBottom: spacing(3),
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing(4) },
   title: { ...typography.display, color: colors.text },
   subtitle: { ...typography.caption, color: colors.textMuted, marginTop: spacing(1) },
   searchWrap: { paddingHorizontal: spacing(6), marginBottom: spacing(3) },

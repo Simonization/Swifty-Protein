@@ -1,7 +1,24 @@
 // Thin client for the auth-only backend (see ../../../API.md for the contract).
-// Set EXPO_PUBLIC_API_URL to point at the backend, e.g. http://192.168.1.20:3000
-// (a LAN IP, not "localhost", when testing on a physical device).
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+//
+// EXPO_PUBLIC_API_URL is inlined at build time, and its default points at the
+// device itself -- useless on a real phone, where the backend is on someone
+// else's laptop. So it is only the default here: Settings can override it at
+// runtime (bonus VII.2), which is what makes a built app usable on a device
+// that was not the one that built it.
+const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
+
+export const DEFAULT_API_BASE_URL = stripTrailingSlash(
+  process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000',
+);
+
+let apiBaseUrl = DEFAULT_API_BASE_URL;
+
+export const getApiBaseUrl = (): string => apiBaseUrl;
+
+// Applied at startup from persisted settings, and on every save.
+export function setApiBaseUrl(url: string): void {
+  apiBaseUrl = stripTrailingSlash(url.trim()) || DEFAULT_API_BASE_URL;
+}
 
 export type ApiErrorCode =
   | 'validation_error'
@@ -44,7 +61,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, {
+    res = await fetch(`${apiBaseUrl}${path}`, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: body !== undefined ? JSON.stringify(body) : undefined,

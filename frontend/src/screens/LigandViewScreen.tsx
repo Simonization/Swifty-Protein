@@ -15,6 +15,7 @@ import {
 } from '../components/MoleculeViewer';
 import { colors, radii, spacing, typography } from '../theme/theme';
 import { elementFor } from '../data/elements';
+import { useSettings } from '../settings/SettingsContext';
 import type { AppStackParamList } from '../navigation/types';
 import type { Ligand } from '../types';
 
@@ -39,12 +40,14 @@ function describeLigand(ligand: Ligand): string {
 
 export function LigandViewScreen({ route, navigation }: Props) {
   const { ligand } = route.params;
+  const { settings } = useSettings();
   const viewerRef = useRef<MoleculeViewerHandle>(null);
   const [selectedAtom, setSelectedAtom] = useState<AtomTapInfo | null>(null);
   const [selectedBond, setSelectedBond] = useState<BondTapInfo | null>(null);
   const [measurement, setMeasurement] = useState<MeasurementInfo | null>(null);
-  const [mode, setMode] = useState<ViewMode>('ballStick');
-  const [showLabels, setShowLabels] = useState(false);
+  // Seeded from Settings (VII.2); both stay switchable per ligand from here.
+  const [mode, setMode] = useState<ViewMode>(settings.defaultMode);
+  const [showLabels, setShowLabels] = useState(settings.showLabelsByDefault);
   const [measureMode, setMeasureMode] = useState(false);
   const [sharing, setSharing] = useState(false);
 
