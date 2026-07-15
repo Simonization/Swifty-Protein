@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { Renderer } from 'expo-three';
@@ -60,7 +60,8 @@ const MEASURE_LINE_COLOR = 0xffd54a;
 
 // Per-mode atom/bond visuals — VII.1: switching modes never touches the
 // underlying geometry, only scale/visibility, so it's instant either way.
-function atomScaleFor(mode: ViewMode, elementRadius: number): number {
+// Wireframe draws no atom spheres at all, so it has no atom scale.
+function atomScaleFor(mode: Exclude<ViewMode, 'wireframe'>, elementRadius: number): number {
   switch (mode) {
     case 'ballStick':
       return elementRadius * 0.28;
@@ -68,8 +69,6 @@ function atomScaleFor(mode: ViewMode, elementRadius: number): number {
       return elementRadius;
     case 'stick':
       return 0.14;
-    case 'wireframe':
-      return 0.0001;
   }
 }
 
@@ -113,11 +112,19 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       showLabelsRef.current = showLabels;
     }, [showLabels]);
 
+    // With labels on, the render loop re-renders this component ~15x/sec. The
+    // gesture objects and the imperative handle below are therefore built once
+    // and read anything volatile through this ref, so a label frame doesn't
+    // rebuild the whole gesture tree.
+    const latest = useRef({ measureMode, onAtomTap, onBondTap, onMeasurementChange });
+    latest.current = { measureMode, onAtomTap, onBondTap, onMeasurementChange };
+
     const applyMode = (nextMode: ViewMode) => {
+      const atomsVisible = nextMode !== 'wireframe';
       for (const mesh of atomMeshesRef.current) {
-        const el = elementFor(mesh.userData.atom.element);
-        mesh.visible = nextMode !== 'wireframe';
-        mesh.scale.setScalar(atomScaleFor(nextMode, el.radius));
+        mesh.visible = atomsVisible;
+        if (!atomsVisible) continue;
+        mesh.scale.setScalar(atomScaleFor(nextMode, elementFor(mesh.userData.atom.element).radius));
       }
       const bondsVisible = nextMode === 'ballStick' || nextMode === 'stick';
       const radius = bondRadiusFor(nextMode);
@@ -132,7 +139,7 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       applyMode(mode);
     }, [mode]);
 
-    const clearMeasurement = () => {
+    const clearMeasurement = useCallback(() => {
       for (const { mesh } of measurePointsRef.current) {
         (mesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
       }
@@ -143,20 +150,24 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
         (measureLineRef.current.material as THREE.Material).dispose();
         measureLineRef.current = null;
       }
-      onMeasurementChange(null);
-    };
+      latest.current.onMeasurementChange(null);
+    }, []);
 
     useEffect(() => {
       if (!measureMode) clearMeasurement();
-    }, [measureMode]);
+    }, [measureMode, clearMeasurement]);
 
-    useImperativeHandle(ref, () => ({
-      captureSnapshot: async () => {
-        const snapshot = await glViewRef.current?.takeSnapshotAsync({ flip: false });
-        return typeof snapshot?.uri === 'string' ? snapshot.uri : null;
-      },
-      clearMeasurement,
-    }));
+    useImperativeHandle(
+      ref,
+      () => ({
+        captureSnapshot: async () => {
+          const snapshot = await glViewRef.current?.takeSnapshotAsync({ flip: false });
+          return typeof snapshot?.uri === 'string' ? snapshot.uri : null;
+        },
+        clearMeasurement,
+      }),
+      [clearMeasurement],
+    );
 
     useEffect(() => {
       return () => {
@@ -222,14 +233,15 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
         const atom = p.mesh.userData.atom as AtomTapInfo;
         return { element: atom.element, name: atom.name };
       };
+      const onMeasurement = latest.current.onMeasurementChange;
       if (pts.length === 2) {
-        onMeasurementChange({ points: pts.map(asLabel), distance: pts[0].pos.distanceTo(pts[1].pos) });
+        onMeasurement({ points: pts.map(asLabel), distance: pts[0].pos.distanceTo(pts[1].pos) });
       } else if (pts.length === 3) {
         const v1 = new THREE.Vector3().subVectors(pts[0].pos, pts[1].pos);
         const v2 = new THREE.Vector3().subVectors(pts[2].pos, pts[1].pos);
-        onMeasurementChange({ points: pts.map(asLabel), angleDeg: THREE.MathUtils.radToDeg(v1.angleTo(v2)) });
+        onMeasurement({ points: pts.map(asLabel), angleDeg: THREE.MathUtils.radToDeg(v1.angleTo(v2)) });
       } else {
-        onMeasurementChange({ points: pts.map(asLabel) });
+        onMeasurement({ points: pts.map(asLabel) });
       }
     };
 
@@ -247,7 +259,9 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       const hits = raycaster.intersectObjects(targets);
       const hit = hits[0]?.object as THREE.Mesh | undefined;
 
-      if (measureMode) {
+      const { measureMode: measuring, onAtomTap: atomTap, onBondTap: bondTap } = latest.current;
+
+      if (measuring) {
         if (hit?.userData.atom) handleMeasureTap(hit);
         return;
       }
@@ -255,16 +269,16 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       if (hit?.userData.atom) {
         const atom = hit.userData.atom as AtomTapInfo;
         highlightElement(atom.element);
-        onBondTap(null);
-        onAtomTap(atom);
+        bondTap(null);
+        atomTap(atom);
       } else if (hit?.userData.bond) {
         highlightElement(null);
-        onAtomTap(null);
-        onBondTap(hit.userData.bond as BondTapInfo);
+        atomTap(null);
+        bondTap(hit.userData.bond as BondTapInfo);
       } else {
         highlightElement(null);
-        onAtomTap(null);
-        onBondTap(null);
+        atomTap(null);
+        bondTap(null);
       }
     };
 
@@ -281,49 +295,53 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       panAnimation.current = { from: { ...pan.current }, to: { x: point.x, y: point.y }, start: Date.now() };
     };
 
-    const panOneFinger = Gesture.Pan()
-      .minPointers(1)
-      .maxPointers(1)
-      .onChange((e) => {
-        rotation.current.y += e.changeX * ROTATE_SPEED;
-        rotation.current.x = Math.max(
-          -Math.PI / 2,
-          Math.min(Math.PI / 2, rotation.current.x + e.changeY * ROTATE_SPEED)
-        );
-      });
+    // Built once: every handler here reads refs (including `latest` for props),
+    // so there is no stale closure to rebuild for.
+    const composed = useMemo(() => {
+      const panOneFinger = Gesture.Pan()
+        .minPointers(1)
+        .maxPointers(1)
+        .onChange((e) => {
+          rotation.current.y += e.changeX * ROTATE_SPEED;
+          rotation.current.x = Math.max(
+            -Math.PI / 2,
+            Math.min(Math.PI / 2, rotation.current.x + e.changeY * ROTATE_SPEED)
+          );
+        });
 
-    const panTwoFinger = Gesture.Pan()
-      .minPointers(2)
-      .maxPointers(2)
-      .onChange((e) => {
-        const scale = baseDistance.current / zoom.current;
-        pan.current.x -= e.changeX * PAN_SPEED * scale;
-        pan.current.y += e.changeY * PAN_SPEED * scale;
-      });
+      const panTwoFinger = Gesture.Pan()
+        .minPointers(2)
+        .maxPointers(2)
+        .onChange((e) => {
+          const scale = baseDistance.current / zoom.current;
+          pan.current.x -= e.changeX * PAN_SPEED * scale;
+          pan.current.y += e.changeY * PAN_SPEED * scale;
+        });
 
-    const pinch = Gesture.Pinch()
-      .onUpdate((e) => {
-        zoom.current = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, savedZoom.current * e.scale));
-      })
-      .onEnd(() => {
-        savedZoom.current = zoom.current;
-      });
+      const pinch = Gesture.Pinch()
+        .onUpdate((e) => {
+          zoom.current = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, savedZoom.current * e.scale));
+        })
+        .onEnd(() => {
+          savedZoom.current = zoom.current;
+        });
 
-    const doubleTap = Gesture.Tap()
-      .numberOfTaps(2)
-      .maxDelay(250)
-      .onEnd((e, success) => {
-        if (success) handleDoubleTap(e.x, e.y);
-      });
+      const doubleTap = Gesture.Tap()
+        .numberOfTaps(2)
+        .maxDelay(250)
+        .onEnd((e, success) => {
+          if (success) handleDoubleTap(e.x, e.y);
+        });
 
-    const singleTap = Gesture.Tap()
-      .numberOfTaps(1)
-      .requireExternalGestureToFail(doubleTap)
-      .onEnd((e, success) => {
-        if (success) handleSingleTap(e.x, e.y);
-      });
+      const singleTap = Gesture.Tap()
+        .numberOfTaps(1)
+        .requireExternalGestureToFail(doubleTap)
+        .onEnd((e, success) => {
+          if (success) handleSingleTap(e.x, e.y);
+        });
 
-    const composed = Gesture.Simultaneous(panOneFinger, panTwoFinger, pinch, doubleTap, singleTap);
+      return Gesture.Simultaneous(panOneFinger, panTwoFinger, pinch, doubleTap, singleTap);
+    }, []);
 
     const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
       // A GL surface cannot exist before its view is laid out, so sizeRef already
@@ -358,6 +376,7 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
 
       let maxDist = 1;
       const positions = new Map<number, THREE.Vector3>();
+      const atomsById = new Map(ligand.atoms.map((a) => [a.id, a]));
       for (const atom of ligand.atoms) {
         const p = new THREE.Vector3(atom.x, atom.y, atom.z).sub(center);
         positions.set(atom.id, p);
@@ -405,8 +424,8 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       for (const bond of ligand.bonds) {
         const pa = positions.get(bond.a);
         const pb = positions.get(bond.b);
-        const atomA = ligand.atoms.find((a) => a.id === bond.a);
-        const atomB = ligand.atoms.find((a) => a.id === bond.b);
+        const atomA = atomsById.get(bond.a);
+        const atomB = atomsById.get(bond.b);
         if (!pa || !pb || !atomA || !atomB) continue;
         const dir = new THREE.Vector3().subVectors(pb, pa);
         const length = dir.length();

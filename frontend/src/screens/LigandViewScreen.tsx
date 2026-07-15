@@ -62,10 +62,9 @@ export function LigandViewScreen({ route, navigation }: Props) {
   };
 
   const toggleMeasureMode = () => {
-    setMeasureMode((prev) => {
-      if (prev) viewerRef.current?.clearMeasurement();
-      return !prev;
-    });
+    // The viewer clears its own measurement when measureMode goes false, so this
+    // must not also do it from inside the updater — React may run that twice.
+    setMeasureMode((prev) => !prev);
     setSelectedAtom(null);
     setSelectedBond(null);
   };
