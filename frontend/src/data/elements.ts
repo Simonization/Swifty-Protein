@@ -147,15 +147,6 @@ const DEFAULT: Element = { symbol: 'X', name: 'Unknown', number: 0, cpkHex: 'FF1
 
 const bySymbol = new Map(ELEMENTS.map((e) => [e.symbol, e]));
 
-export function allElements(): Element[] {
-  return ELEMENTS;
-}
-
-export function getElement(symbol: string): Element | null {
-  if (!symbol) return null;
-  return bySymbol.get(symbol.toUpperCase()) ?? null;
-}
-
 // For the renderer: never returns null — falls back to the "unknown" element.
 export function elementFor(symbol: string): Element {
   return bySymbol.get((symbol ?? '').toUpperCase()) ?? DEFAULT;

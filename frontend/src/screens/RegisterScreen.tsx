@@ -9,13 +9,10 @@ import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { colors, spacing, typography } from '../theme/theme';
 import { useAuth, describeAuthError } from '../auth/AuthContext';
+import { validatePassword, validateUsername } from '../auth/credentials';
 import type { AuthStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
-
-const MIN_USERNAME = 3;
-const MAX_USERNAME = 32;
-const MIN_PASSWORD = 8;
 
 export function RegisterScreen({ navigation }: Props) {
   const { register } = useAuth();
@@ -27,11 +24,8 @@ export function RegisterScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
 
   const validate = (): string | null => {
-    const trimmed = username.trim();
-    if (trimmed.length < MIN_USERNAME || trimmed.length > MAX_USERNAME) {
-      return `Username must be ${MIN_USERNAME}-${MAX_USERNAME} characters.`;
-    }
-    if (password.length < MIN_PASSWORD) return `Password must be at least ${MIN_PASSWORD} characters.`;
+    const invalid = validateUsername(username) ?? validatePassword(password);
+    if (invalid) return invalid;
     if (password !== confirm) return 'Passwords do not match.';
     return null;
   };

@@ -34,12 +34,11 @@ export class ApiError extends Error {
 interface RequestOptions {
   method?: 'GET' | 'POST';
   body?: unknown;
-  token?: string;
   timeoutMs?: number;
 }
 
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, token, timeoutMs = 10000 } = opts;
+  const { method = 'GET', body, timeoutMs = 10000 } = opts;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -47,10 +46,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   try {
     res = await fetch(`${API_BASE_URL}${path}`, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });

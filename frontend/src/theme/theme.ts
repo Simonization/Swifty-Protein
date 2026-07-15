@@ -44,5 +44,3 @@ export const typography = {
   caption: { fontSize: 12, fontWeight: '500' as const, letterSpacing: 0.3 },
 };
 
-export const theme = { colors, gradients, spacing, radii, typography };
-export type Theme = typeof theme;

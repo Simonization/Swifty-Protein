@@ -25,11 +25,6 @@ export interface Ligand {
   bonds: Bond[];
 }
 
-export interface LigandSummary {
-  id: string;
-  name?: string;
-}
-
 export interface Element {
   symbol: string;
   name: string;
