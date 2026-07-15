@@ -9,7 +9,7 @@
 
 services:
   db:
-    image: postgres:16-alpine          # pinned for 2-year reproducibility
+    image: postgres:16.14-alpine       # exact patch: `16-alpine` drifts as 16.x moves
     environment:
       POSTGRES_USER: protein
       POSTGRES_PASSWORD: protein

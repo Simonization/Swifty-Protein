@@ -3,7 +3,8 @@
 #
 # Runs the auth API. Ligand fetch/parse lives in the RN app, not here.
 # =============================================================================
-FROM node:20-bookworm-slim
+# Exact patch, not `20-bookworm-slim`: that tag drifts as 20.x moves.
+FROM node:20.20.2-bookworm-slim
 
 ENV NODE_ENV=production
 WORKDIR /app
