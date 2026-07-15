@@ -31,6 +31,9 @@ services:
     environment:
       DATABASE_URL: postgres://protein:protein@db:5432/protein
       PORT: 3000
+      # From ./.env, which `make up` generates with a random value. The image runs
+      # NODE_ENV=production, so config.js refuses to boot without a real secret.
+      JWT_SECRET: ${JWT_SECRET:?not set — run `make up`, which generates one into .env}
     ports:
       - "3000:3000"                     # RN app / device talks to host:3000
     healthcheck:

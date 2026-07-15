@@ -22,7 +22,9 @@ doctor: ## Check that required dependencies are installed
 	@bash scripts/doctor.sh
 
 up: ## Start backend + database (detached)
+	@bash scripts/ensure-env.sh
 	$(COMPOSE) up -d --build db backend
+	@bash scripts/smoke.sh
 	@echo ">> Backend on http://localhost:3000  —  now install dist/app-release.apk on a device"
 
 down: ## Stop and remove backend + database containers
