@@ -10,7 +10,8 @@ import { LoadingOverlay } from '../components/LoadingOverlay';
 import { colors, radii, spacing, typography } from '../theme/theme';
 import { useAuth } from '../auth/AuthContext';
 import { LIGAND_IDS } from '../data/ligandIds';
-import { fetchLigand, RcsbError, type RcsbErrorKind } from '../lib/rcsb';
+import { loadLigand } from '../data/ligands';
+import { RcsbError, type RcsbErrorKind } from '../lib/rcsb';
 import type { AppStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'LigandList'>;
@@ -37,7 +38,7 @@ export function LigandListScreen({ navigation }: Props) {
     if (pendingId) return; // one fetch at a time
     setPendingId(id);
     try {
-      const ligand = await fetchLigand(id);
+      const ligand = await loadLigand(id);
       navigation.navigate('LigandView', { ligand });
     } catch (err) {
       if (err instanceof RcsbError) {

@@ -16,6 +16,7 @@ import {
 import { colors, radii, spacing, typography } from '../theme/theme';
 import { elementFor } from '../data/elements';
 import type { AppStackParamList } from '../navigation/types';
+import type { Ligand } from '../types';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'LigandView'>;
 
@@ -27,6 +28,14 @@ const MODES: { key: ViewMode; label: string; icon: keyof typeof MaterialCommunit
 ];
 
 const BOND_ORDER_LABEL: Record<1 | 2 | 3, string> = { 1: 'Single', 2: 'Double', 3: 'Triple' };
+
+// Bonus VII.5: describe what is actually in the picture, not just its id.
+// e.g. "ATP — ADENOSINE-5'-TRIPHOSPHATE · C10 H16 N5 O13 P3 · 47 atoms"
+function describeLigand(ligand: Ligand): string {
+  const headline = [ligand.id, ligand.name].filter(Boolean).join(' — ');
+  const details = [ligand.formula, `${ligand.atoms.length} atoms`].filter(Boolean);
+  return [headline, ...details].join(' · ');
+}
 
 export function LigandViewScreen({ route, navigation }: Props) {
   const { ligand } = route.params;
@@ -53,7 +62,7 @@ export function LigandViewScreen({ route, navigation }: Props) {
         Alert.alert('Sharing unavailable', 'Sharing is not supported on this device.');
         return;
       }
-      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: `${ligand.id} — Swifty Protein` });
+      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: describeLigand(ligand) });
     } catch {
       Alert.alert('Something went wrong', 'Please try sharing again.');
     } finally {
