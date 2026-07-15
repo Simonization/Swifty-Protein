@@ -58,7 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onChange = (next: AppStateStatus) => {
-      if (next !== 'active' && wasUnlocked.current) {
+      // 'background' only, never 'inactive': iOS fires 'inactive' for the share
+      // sheet, Control Center, and notification banners, none of which should
+      // kick the user back to Login mid-action.
+      if (next === 'background' && wasUnlocked.current) {
         wasUnlocked.current = false;
         setState((s) => (s.status === 'unlocked' ? { ...s, status: 'locked' } : s));
       }
