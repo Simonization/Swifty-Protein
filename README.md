@@ -17,8 +17,8 @@ is unreachable.
 - **RN app** → fetches `.cif` directly from RCSB (`/ligands/view/{id}.cif`), parses
   in-app (`frontend/src/lib/`), renders 3D, handles biometric login + foreground re-lock.
 - **Backend (Fastify)** → accounts only: register / login / me, JWT, Argon2id, Postgres.
-- See [`API.md`](API.md) for the contract and the rationale in
-  [the architecture plan](.claude/plans/now-one-overview-agent-functional-cat.md).
+- See [`API.md`](API.md) for the contract, [`JURY.md`](JURY.md) to run it, and
+  [`fieldtrip.md`](fieldtrip.md) for how the architecture got here.
 
 **Ownership:** Simon authors and defends the *shared core* (CIF parser, RCSB fetch,
 types, element data — they run in the app but are Simon's modules). Rodolfo authors
@@ -53,6 +53,12 @@ Off-weeks:
 ## Week-by-week plan
 
 Each week begins with the Monday call.
+
+> **Historical.** Weeks 3–5 below assign Simon a ligand-data and atom-metadata API.
+> That was superseded: the ligand pipeline moved into the app (see Architecture
+> above), and those endpoints were retired — `backend/test/auth.test.js` now asserts
+> they 404. The work itself still happened, as `frontend/src/lib/` and
+> `frontend/src/data/`. Left as written for the record.
 
 ### Week 1 — Mon 22 Jun  · _both_
 - **Call:** agree on stack, repo structure, API contract, scope.
