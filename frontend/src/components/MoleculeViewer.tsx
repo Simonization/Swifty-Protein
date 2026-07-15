@@ -80,6 +80,8 @@ function bondRadiusFor(mode: ViewMode): number {
 export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerProps>(
   function MoleculeViewer({ ligand, mode, showLabels, measureMode, onAtomTap, onBondTap, onMeasurementChange }, ref) {
     const glViewRef = useRef<GLView>(null);
+    // Layout dp, never physical pixels: gesture coordinates arrive in dp and the
+    // label offsets below are dp. onLayout is the only writer.
     const sizeRef = useRef({ width: 1, height: 1 });
     const rendererRef = useRef<Renderer | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -324,11 +326,14 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
     const composed = Gesture.Simultaneous(panOneFinger, panTwoFinger, pinch, doubleTap, singleTap);
 
     const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
-      const width = gl.drawingBufferWidth;
-      const height = gl.drawingBufferHeight;
-      sizeRef.current = { width, height };
+      // A GL surface cannot exist before its view is laid out, so sizeRef already
+      // holds the dp size. Derive the ratio from the buffer and the layout we both
+      // already have: that keeps them consistent by construction, where
+      // PixelRatio.get() is only assumed to match the GL buffer.
+      const { width, height } = sizeRef.current;
+      const pixelRatio = gl.drawingBufferWidth / width;
 
-      const renderer = new Renderer({ gl, width, height, clearColor: colors.bg });
+      const renderer = new Renderer({ gl, width, height, pixelRatio, clearColor: colors.bg });
       rendererRef.current = renderer;
 
       const scene = new THREE.Scene();
@@ -380,7 +385,10 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
         const p = positions.get(atom.id)!;
         mesh.position.copy(p);
         mesh.scale.setScalar(el.radius * 0.28);
-        mesh.userData.atom = { id: atom.id, element: el.symbol, name: atom.name, x: atom.x, y: atom.y, z: atom.z };
+        // atom.element, not el.symbol: the parser already canonicalises to "Cl",
+        // where the table's key is the uppercase "CL" it is looked up by. This is
+        // what labels and the tooltip display, and what bond info already uses.
+        mesh.userData.atom = { id: atom.id, element: atom.element, name: atom.name, x: atom.x, y: atom.y, z: atom.z };
         group.add(mesh);
         atomMeshes.push(mesh);
       }
