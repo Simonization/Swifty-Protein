@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { PixelRatio, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three';
@@ -80,7 +80,8 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
   function MoleculeViewer({ ligand, mode, showLabels, measureMode, onAtomTap, onBondTap, onMeasurementChange }, ref) {
     const glViewRef = useRef<GLView>(null);
     // Layout dp, never physical pixels: gesture coordinates arrive in dp and the
-    // label offsets below are dp. onLayout is the only writer.
+    // label offsets below are dp. Written by onLayout, and once by
+    // onContextCreate if it somehow runs first -- but always in dp.
     const sizeRef = useRef({ width: 1, height: 1 });
     const rendererRef = useRef<Renderer | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -344,12 +345,20 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
     }, []);
 
     const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
-      // A GL surface cannot exist before its view is laid out, so sizeRef already
-      // holds the dp size. Derive the ratio from the buffer and the layout we both
-      // already have: that keeps them consistent by construction, where
-      // PixelRatio.get() is only assumed to match the GL buffer.
-      const { width, height } = sizeRef.current;
-      const pixelRatio = gl.drawingBufferWidth / width;
+      // A GL surface cannot exist before its view is laid out, so onLayout has
+      // normally already put the dp size in sizeRef. Preferring it, and deriving
+      // the ratio from it, keeps buffer and layout consistent by construction --
+      // where PixelRatio.get() is only *assumed* to match the GL buffer.
+      //
+      // But don't stake the whole viewer on that ordering: if layout somehow has
+      // not landed, fall back to the screen scale. A slightly wrong ratio is
+      // recoverable on the next layout; a 1x1 viewport is a black screen.
+      const laidOut = sizeRef.current.width > 1 && sizeRef.current.height > 1;
+      const pixelRatio = laidOut ? gl.drawingBufferWidth / sizeRef.current.width : PixelRatio.get();
+      const width = laidOut ? sizeRef.current.width : gl.drawingBufferWidth / pixelRatio;
+      const height = laidOut ? sizeRef.current.height : gl.drawingBufferHeight / pixelRatio;
+      // Keep the invariant that matters: sizeRef is dp, whichever path set it.
+      sizeRef.current = { width, height };
 
       const renderer = new Renderer({ gl, width, height, pixelRatio, clearColor: colors.bg });
       rendererRef.current = renderer;
