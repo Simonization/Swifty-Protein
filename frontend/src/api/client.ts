@@ -64,7 +64,17 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   }
 
   const text = await res.text();
-  const json = text ? JSON.parse(text) : null;
+  let json: any = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      // A 502 page, a captive portal, or any proxy in front of the API answers
+      // with HTML. Report that as an ApiError like every other failure here,
+      // rather than throwing a raw SyntaxError past the model callers handle.
+      throw new ApiError('internal_error', FRIENDLY_MESSAGES.internal_error!, res.status);
+    }
+  }
 
   if (!res.ok) {
     const code: ApiErrorCode = json?.error?.code ?? 'internal_error';
