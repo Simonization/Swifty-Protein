@@ -11,8 +11,23 @@ set -uo pipefail
 
 URL="http://localhost:${PORT:-3000}/health"
 
+# curl is not guaranteed on the host, and failing for a missing test tool would be
+# the same false alarm this script exists to prevent. Node 20+ is already required
+# to run the app, and has global fetch.
+if command -v curl >/dev/null 2>&1; then
+  probe() { curl -fsS "$URL" 2>/dev/null | grep -q '"status":"ok"'; }
+elif command -v node >/dev/null 2>&1; then
+  probe() {
+    node -e "fetch('$URL').then(r=>r.json()).then(j=>process.exit(j.status==='ok'?0:1)).catch(()=>process.exit(1))" 2>/dev/null
+  }
+else
+  echo "!! neither curl nor node found — skipping the health check" >&2
+  echo "   verify manually: $URL" >&2
+  exit 0
+fi
+
 for _ in $(seq 1 30); do
-  if curl -fsS "$URL" 2>/dev/null | grep -q '"status":"ok"'; then
+  if probe; then
     echo ">> backend healthy at $URL"
     exit 0
   fi

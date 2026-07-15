@@ -16,17 +16,11 @@ import { MoleculeBackdrop } from '../components/MoleculeBackdrop';
 import { colors, radii, spacing, typography } from '../theme/theme';
 import { useSettings } from '../settings/SettingsContext';
 import { DEFAULT_SETTINGS, isValidApiUrl } from '../settings/settings';
+import { VIEW_MODES } from '../data/viewModes';
 import type { ViewMode } from '../components/MoleculeViewer';
 import type { AppStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Settings'>;
-
-const MODES: { key: ViewMode; label: string }[] = [
-  { key: 'ballStick', label: 'Ball & Stick' },
-  { key: 'spaceFilling', label: 'Space-Filling' },
-  { key: 'stick', label: 'Stick' },
-  { key: 'wireframe', label: 'Wireframe' },
-];
 
 export function SettingsScreen({ navigation }: Props) {
   const { settings, save } = useSettings();
@@ -93,7 +87,7 @@ export function SettingsScreen({ navigation }: Props) {
         <Text style={styles.sectionLabel}>Viewer</Text>
         <Text style={styles.fieldLabel}>Default view mode</Text>
         <View style={styles.modeGrid}>
-          {MODES.map((m) => (
+          {VIEW_MODES.map((m) => (
             <Pressable
               key={m.key}
               onPress={() => setDefaultMode(m.key)}

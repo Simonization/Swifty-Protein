@@ -15,18 +15,12 @@ import {
 } from '../components/MoleculeViewer';
 import { colors, radii, spacing, typography } from '../theme/theme';
 import { elementFor } from '../data/elements';
+import { VIEW_MODES } from '../data/viewModes';
 import { useSettings } from '../settings/SettingsContext';
 import type { AppStackParamList } from '../navigation/types';
 import type { Ligand } from '../types';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'LigandView'>;
-
-const MODES: { key: ViewMode; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
-  { key: 'ballStick', label: 'Ball & Stick', icon: 'chart-bubble' },
-  { key: 'spaceFilling', label: 'Space-Filling', icon: 'circle' },
-  { key: 'stick', label: 'Stick', icon: 'grid' },
-  { key: 'wireframe', label: 'Wireframe', icon: 'vector-line' },
-];
 
 const BOND_ORDER_LABEL: Record<1 | 2 | 3, string> = { 1: 'Single', 2: 'Double', 3: 'Triple' };
 
@@ -105,7 +99,7 @@ export function LigandViewScreen({ route, navigation }: Props) {
       </View>
 
       <View style={styles.modeRow}>
-        {MODES.map((m) => (
+        {VIEW_MODES.map((m) => (
           <Pressable
             key={m.key}
             onPress={() => setMode(m.key)}

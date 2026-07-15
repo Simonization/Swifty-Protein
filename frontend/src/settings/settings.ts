@@ -6,6 +6,7 @@
 import { File, Paths } from 'expo-file-system';
 
 import { DEFAULT_API_BASE_URL } from '../api/client';
+import { isViewMode } from '../data/viewModes';
 import type { ViewMode } from '../components/MoleculeViewer';
 
 export interface Settings {
@@ -22,8 +23,6 @@ export const DEFAULT_SETTINGS: Settings = {
   showLabelsByDefault: false,
 };
 
-const VIEW_MODES: ViewMode[] = ['ballStick', 'spaceFilling', 'stick', 'wireframe'];
-
 export const isValidApiUrl = (url: string): boolean => /^https?:\/\/\S+$/i.test(url.trim());
 
 const FILE_NAME = 'settings.json';
@@ -39,9 +38,7 @@ function coerce(raw: unknown): Settings {
       typeof value.apiBaseUrl === 'string' && isValidApiUrl(value.apiBaseUrl)
         ? value.apiBaseUrl
         : DEFAULT_SETTINGS.apiBaseUrl,
-    defaultMode: VIEW_MODES.includes(value.defaultMode as ViewMode)
-      ? (value.defaultMode as ViewMode)
-      : DEFAULT_SETTINGS.defaultMode,
+    defaultMode: isViewMode(value.defaultMode) ? value.defaultMode : DEFAULT_SETTINGS.defaultMode,
     showLabelsByDefault:
       typeof value.showLabelsByDefault === 'boolean'
         ? value.showLabelsByDefault

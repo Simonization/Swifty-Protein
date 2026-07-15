@@ -30,5 +30,13 @@ gen_secret() {
 }
 
 umask 077
+
+# Start on a fresh line. Appending to a .env whose last line has no trailing
+# newline would splice onto it ("FOO=barJWT_SECRET=..."), defining nothing --
+# and the grep above would miss it forever, appending again on every run.
+if [ -s .env ] && [ -n "$(tail -c 1 .env)" ]; then
+  printf '\n' >> .env
+fi
+
 printf 'JWT_SECRET=%s\n' "$(gen_secret)" >> .env
 echo ">> generated a random JWT_SECRET into .env"

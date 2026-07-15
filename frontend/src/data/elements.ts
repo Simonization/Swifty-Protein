@@ -6,8 +6,11 @@
 // ion ligands) rather than failing loudly.
 //
 // Colors are the Jmol CPK set (jmol.sourceforge.net/jscolors). Radii are Bondi
-// van der Waals values where defined, extended with Alvarez (2013) for the rest;
-// they only scale spheres, so the synthetic elements' 2.0 placeholder is cosmetic.
+// van der Waals values where defined, extended with Alvarez (2013) for the rest.
+//
+// Elements 110-118 are placeholders: Jmol assigns them no distinct colour, and no
+// ligand contains a synthetic element, so they share Mt's colour and a 2.0 radius.
+// Everything up to 109 is the real value.
 import type { Element } from '../types';
 
 // [atomic number, symbol, name, CPK hex, van der Waals radius (Å)]
