@@ -38,9 +38,11 @@ src/
 test/                 node:test auth suite (Fastify inject)
 ```
 
-## Implementation status / TODO
+## What's implemented
 
-- ✅ Auth (register / login / me), JWT, Argon2id hashing
-- ✅ Auth test suite (`npm test`)
-- ✅ Postgres-backed accounts (plain `pg`, schema created on boot); in-memory
+The auth-only scope above is complete; there is no pending backend work.
+
+- Auth (register / login / me), JWT with a 7-day expiry, Argon2id hashing
+- Auth test suite (`npm test`)
+- Postgres-backed accounts (plain `pg`, schema created on boot); in-memory
   fallback for local dev/tests, Postgres when `DATABASE_URL` is set
