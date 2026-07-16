@@ -3,8 +3,8 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-import { loadLigand } from '../src/data/ligands';
-import { readCachedCif, writeCachedCif } from '../src/data/ligandCache';
+import { listCachedLigands, loadLigand } from '../src/data/ligands';
+import { listCachedCodes, readCachedCif, writeCachedCif } from '../src/data/ligandCache';
 import { fetchLigandCif, RcsbError } from '../src/lib/rcsb';
 
 jest.mock('../src/data/ligandCache');
@@ -17,6 +17,7 @@ const ATP = readFileSync(join(__dirname, 'fixtures', 'ATP.cif'), 'utf8');
 
 const mockRead = readCachedCif as jest.MockedFunction<typeof readCachedCif>;
 const mockWrite = writeCachedCif as jest.MockedFunction<typeof writeCachedCif>;
+const mockList = listCachedCodes as jest.MockedFunction<typeof listCachedCodes>;
 const mockFetch = fetchLigandCif as jest.MockedFunction<typeof fetchLigandCif>;
 
 beforeEach(() => {
@@ -77,5 +78,37 @@ describe('loadLigand', () => {
     mockFetch.mockRejectedValue(new RcsbError('offline'));
 
     await expect(loadLigand('ATP')).rejects.toMatchObject({ kind: 'offline' });
+  });
+});
+
+describe('listCachedLigands', () => {
+  it('describes a cached ligand from the file already on disk, with no network', async () => {
+    mockList.mockReturnValue(['ATP']);
+    mockRead.mockResolvedValue(ATP);
+
+    const cached = await listCachedLigands();
+
+    expect(cached.get('ATP')).toEqual({
+      id: 'ATP',
+      name: "ADENOSINE-5'-TRIPHOSPHATE",
+      formula: 'C10 H16 N5 O13 P3',
+      atomCount: 47,
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('omits a truncated entry rather than listing a ligand with no atoms', async () => {
+    mockList.mockReturnValue(['ATP', 'BAD']);
+    mockRead.mockImplementation(async (code) => (code === 'ATP' ? ATP : 'truncated, no atoms'));
+
+    const cached = await listCachedLigands();
+
+    expect([...cached.keys()]).toEqual(['ATP']);
+  });
+
+  it('is empty when nothing has been opened yet', async () => {
+    mockList.mockReturnValue([]);
+
+    expect((await listCachedLigands()).size).toBe(0);
   });
 });

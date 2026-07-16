@@ -21,6 +21,23 @@ function cacheFile(code: string): File {
   return new File(dir, `${code}.cif`);
 }
 
+// Which ligands are cached, from the directory listing alone -- no index file
+// to keep in sync with the .cif files it describes.
+export function listCachedCodes(): string[] {
+  try {
+    const dir = new Directory(Paths.cache, DIR_NAME);
+    if (!dir.exists) return [];
+    return dir
+      .list()
+      .map((entry) => entry.name)
+      .filter((name) => name.endsWith('.cif'))
+      .map((name) => name.slice(0, -'.cif'.length))
+      .filter(isSafeCode);
+  } catch {
+    return [];
+  }
+}
+
 export async function readCachedCif(code: string): Promise<string | null> {
   if (!isSafeCode(code)) return null;
   try {
