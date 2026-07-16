@@ -7,7 +7,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { colors } from '../theme/theme';
 import { elementFor } from '../data/elements';
-import type { Ligand } from '../types';
+import type { Atom, Ligand } from '../types';
 
 export type ViewMode = 'ballStick' | 'spaceFilling' | 'wireframe' | 'stick';
 
@@ -34,9 +34,16 @@ export interface MeasurementInfo {
   angleDeg?: number;
 }
 
+// What the viewer currently has selected. At most one of these can be true at a
+// time -- a tap in measure mode never selects an atom or a bond, and leaving
+// measure mode clears the measurement -- so it is one value, not three.
+export type Selection =
+  | { kind: 'atom'; atom: AtomTapInfo }
+  | { kind: 'bond'; bond: BondTapInfo }
+  | { kind: 'measurement'; measurement: MeasurementInfo };
+
 export interface MoleculeViewerHandle {
   captureSnapshot: () => Promise<string | null>;
-  clearMeasurement: () => void;
 }
 
 interface MoleculeViewerProps {
@@ -44,9 +51,7 @@ interface MoleculeViewerProps {
   mode: ViewMode;
   showLabels: boolean;
   measureMode: boolean;
-  onAtomTap: (atom: AtomTapInfo | null) => void;
-  onBondTap: (bond: BondTapInfo | null) => void;
-  onMeasurementChange: (measurement: MeasurementInfo | null) => void;
+  onSelectionChange: (selection: Selection | null) => void;
 }
 
 const MIN_ZOOM = 0.4;
@@ -57,6 +62,10 @@ const CENTER_ANIM_MS = 450;
 const HIGHLIGHT_EMISSIVE = 0x2a2a2a;
 const MEASURE_EMISSIVE = 0x5c4400;
 const MEASURE_LINE_COLOR = 0xffd54a;
+
+// Shared: a Raycaster keeps no state between setFromCamera calls and picking is
+// synchronous, so one instance serves every tap.
+const raycaster = new THREE.Raycaster();
 
 // Per-mode atom/bond visuals — VII.1: switching modes never touches the
 // underlying geometry, only scale/visibility, so it's instant either way.
@@ -77,7 +86,7 @@ function bondRadiusFor(mode: ViewMode): number {
 }
 
 export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerProps>(
-  function MoleculeViewer({ ligand, mode, showLabels, measureMode, onAtomTap, onBondTap, onMeasurementChange }, ref) {
+  function MoleculeViewer({ ligand, mode, showLabels, measureMode, onSelectionChange }, ref) {
     const glViewRef = useRef<GLView>(null);
     // Layout dp, never physical pixels: gesture coordinates arrive in dp and the
     // label offsets below are dp. Written by onLayout, and once by
@@ -117,8 +126,8 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
     // gesture objects and the imperative handle below are therefore built once
     // and read anything volatile through this ref, so a label frame doesn't
     // rebuild the whole gesture tree.
-    const latest = useRef({ measureMode, onAtomTap, onBondTap, onMeasurementChange });
-    latest.current = { measureMode, onAtomTap, onBondTap, onMeasurementChange };
+    const latest = useRef({ measureMode, onSelectionChange });
+    latest.current = { measureMode, onSelectionChange };
 
     const applyMode = (nextMode: ViewMode) => {
       const atomsVisible = nextMode !== 'wireframe';
@@ -151,13 +160,15 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
         (measureLineRef.current.material as THREE.Material).dispose();
         measureLineRef.current = null;
       }
-      latest.current.onMeasurementChange(null);
+      latest.current.onSelectionChange(null);
     }, []);
 
     useEffect(() => {
       if (!measureMode) clearMeasurement();
     }, [measureMode, clearMeasurement]);
 
+    // Sharing is the only thing the screen needs to reach in for; the
+    // measurement clears itself when measureMode goes false.
     useImperativeHandle(
       ref,
       () => ({
@@ -165,9 +176,8 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
           const snapshot = await glViewRef.current?.takeSnapshotAsync({ flip: false });
           return typeof snapshot?.uri === 'string' ? snapshot.uri : null;
         },
-        clearMeasurement,
       }),
-      [clearMeasurement],
+      [],
     );
 
     useEffect(() => {
@@ -230,37 +240,40 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       rebuildMeasureLine();
 
       const pts = measurePointsRef.current;
-      const asLabel = (p: (typeof pts)[number]) => {
-        const atom = p.mesh.userData.atom as AtomTapInfo;
-        return { element: atom.element, name: atom.name };
+      const measurement: MeasurementInfo = {
+        points: pts.map(({ mesh: m }) => {
+          const atom = m.userData.atom as AtomTapInfo;
+          return { element: atom.element, name: atom.name };
+        }),
       };
-      const onMeasurement = latest.current.onMeasurementChange;
       if (pts.length === 2) {
-        onMeasurement({ points: pts.map(asLabel), distance: pts[0].pos.distanceTo(pts[1].pos) });
+        measurement.distance = pts[0].pos.distanceTo(pts[1].pos);
       } else if (pts.length === 3) {
         const v1 = new THREE.Vector3().subVectors(pts[0].pos, pts[1].pos);
         const v2 = new THREE.Vector3().subVectors(pts[2].pos, pts[1].pos);
-        onMeasurement({ points: pts.map(asLabel), angleDeg: THREE.MathUtils.radToDeg(v1.angleTo(v2)) });
-      } else {
-        onMeasurement({ points: pts.map(asLabel) });
+        measurement.angleDeg = THREE.MathUtils.radToDeg(v1.angleTo(v2));
       }
+      latest.current.onSelectionChange({ kind: 'measurement', measurement });
+    };
+
+    // Gesture coordinates arrive in dp and sizeRef is dp, so the whole pick
+    // stays in one coordinate system.
+    const pickAt = (x: number, y: number, meshes: THREE.Mesh[]): THREE.Intersection | undefined => {
+      const camera = cameraRef.current;
+      if (!camera) return undefined;
+      const { width, height } = sizeRef.current;
+      raycaster.setFromCamera(new THREE.Vector2((x / width) * 2 - 1, -(y / height) * 2 + 1), camera);
+      // intersectObjects() never checks `.visible` itself, so meshes hidden by
+      // the current view mode (e.g. bonds in Wireframe) must be filtered out
+      // here or they'd stay tappable while invisible.
+      return raycaster.intersectObjects(meshes.filter((m) => m.visible))[0];
     };
 
     const handleSingleTap = (x: number, y: number) => {
-      const camera = cameraRef.current;
-      if (!camera) return;
-      const { width, height } = sizeRef.current;
-      const ndc = new THREE.Vector2((x / width) * 2 - 1, -(y / height) * 2 + 1);
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(ndc, camera);
-      // Raycaster.intersectObjects() never checks `.visible` itself, so meshes
-      // hidden by the current view mode (e.g. bonds in Wireframe) must be
-      // filtered out here or they'd stay tappable while invisible.
-      const targets = [...atomMeshesRef.current, ...bondMeshesRef.current].filter((m) => m.visible);
-      const hits = raycaster.intersectObjects(targets);
-      const hit = hits[0]?.object as THREE.Mesh | undefined;
-
-      const { measureMode: measuring, onAtomTap: atomTap, onBondTap: bondTap } = latest.current;
+      const hit = pickAt(x, y, [...atomMeshesRef.current, ...bondMeshesRef.current])?.object as
+        | THREE.Mesh
+        | undefined;
+      const { measureMode: measuring, onSelectionChange: select } = latest.current;
 
       if (measuring) {
         if (hit?.userData.atom) handleMeasureTap(hit);
@@ -270,30 +283,24 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       if (hit?.userData.atom) {
         const atom = hit.userData.atom as AtomTapInfo;
         highlightElement(atom.element);
-        bondTap(null);
-        atomTap(atom);
+        select({ kind: 'atom', atom });
       } else if (hit?.userData.bond) {
         highlightElement(null);
-        atomTap(null);
-        bondTap(hit.userData.bond as BondTapInfo);
+        select({ kind: 'bond', bond: hit.userData.bond as BondTapInfo });
       } else {
         highlightElement(null);
-        atomTap(null);
-        bondTap(null);
+        select(null);
       }
     };
 
     const handleDoubleTap = (x: number, y: number) => {
-      const camera = cameraRef.current;
-      if (!camera) return;
-      const { width, height } = sizeRef.current;
-      const ndc = new THREE.Vector2((x / width) * 2 - 1, -(y / height) * 2 + 1);
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(ndc, camera);
-      const hits = raycaster.intersectObjects(atomMeshesRef.current.filter((m) => m.visible));
-      if (hits.length === 0) return;
-      const point = hits[0].point;
-      panAnimation.current = { from: { ...pan.current }, to: { x: point.x, y: point.y }, start: Date.now() };
+      const hit = pickAt(x, y, atomMeshesRef.current);
+      if (!hit) return;
+      panAnimation.current = {
+        from: { ...pan.current },
+        to: { x: hit.point.x, y: hit.point.y },
+        start: Date.now(),
+      };
     };
 
     // Built once: every handler here reads refs (including `latest` for props),
@@ -383,13 +390,14 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       for (const atom of ligand.atoms) center.add(new THREE.Vector3(atom.x, atom.y, atom.z));
       if (ligand.atoms.length > 0) center.divideScalar(ligand.atoms.length);
 
+      // Each atom with its centred position, keyed by id: bonds reference atoms
+      // by id rather than by array index, and the bond loop below needs both.
       let maxDist = 1;
-      const positions = new Map<number, THREE.Vector3>();
-      const atomsById = new Map(ligand.atoms.map((a) => [a.id, a]));
+      const byId = new Map<number, { atom: Atom; pos: THREE.Vector3 }>();
       for (const atom of ligand.atoms) {
-        const p = new THREE.Vector3(atom.x, atom.y, atom.z).sub(center);
-        positions.set(atom.id, p);
-        maxDist = Math.max(maxDist, p.length());
+        const pos = new THREE.Vector3(atom.x, atom.y, atom.z).sub(center);
+        byId.set(atom.id, { atom, pos });
+        maxDist = Math.max(maxDist, pos.length());
       }
       baseDistance.current = Math.max(maxDist * 2.6, 4);
       applyCamera();
@@ -410,9 +418,8 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       for (const atom of ligand.atoms) {
         const el = elementFor(atom.element);
         const mesh = new THREE.Mesh(sphereGeom, materialFor(el.cpkHex).clone());
-        const p = positions.get(atom.id)!;
-        mesh.position.copy(p);
-        mesh.scale.setScalar(el.radius * 0.28);
+        mesh.position.copy(byId.get(atom.id)!.pos);
+        // Scale is applyMode's alone -- see the applyMode(mode) call below.
         // atom.element, not el.symbol: the parser already canonicalises to "Cl",
         // where the table's key is the uppercase "CL" it is looked up by. This is
         // what labels and the tooltip display, and what bond info already uses.
@@ -431,38 +438,36 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       };
 
       for (const bond of ligand.bonds) {
-        const pa = positions.get(bond.a);
-        const pb = positions.get(bond.b);
-        const atomA = atomsById.get(bond.a);
-        const atomB = atomsById.get(bond.b);
-        if (!pa || !pb || !atomA || !atomB) continue;
-        const dir = new THREE.Vector3().subVectors(pb, pa);
+        const a = byId.get(bond.a);
+        const b = byId.get(bond.b);
+        if (!a || !b) continue;
+        const dir = new THREE.Vector3().subVectors(b.pos, a.pos);
         const length = dir.length();
         if (length < 1e-6) continue;
-        const mid = new THREE.Vector3().addVectors(pa, pb).multiplyScalar(0.5);
-        const colorA = elementFor(atomA.element).cpkHex;
-        const colorB = elementFor(atomB.element).cpkHex;
+        const mid = new THREE.Vector3().addVectors(a.pos, b.pos).multiplyScalar(0.5);
+        const colorA = elementFor(a.atom.element).cpkHex;
+        const colorB = elementFor(b.atom.element).cpkHex;
         const half = length / 2;
         const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
         const bondInfo: BondTapInfo = {
           order: bond.order,
           aromatic: !!bond.aromatic,
           length,
-          a: { element: atomA.element, name: atomA.name },
-          b: { element: atomB.element, name: atomB.name },
+          a: { element: a.atom.element, name: a.atom.name },
+          b: { element: b.atom.element, name: b.atom.name },
         };
 
+        // Two half-cylinders, each in its own atom's colour. Their radius and
+        // length come from applyMode via userData.halfLength.
         const meshA = new THREE.Mesh(cylinderGeom, materialFor(colorA));
-        meshA.scale.set(0.09, half, 0.09);
         meshA.quaternion.copy(quat);
-        meshA.position.copy(pa).addScaledVector(dir, 0.25);
+        meshA.position.copy(a.pos).addScaledVector(dir, 0.25);
         meshA.userData.bond = bondInfo;
         meshA.userData.halfLength = half;
         group.add(meshA);
         bondMeshes.push(meshA);
 
         const meshB = new THREE.Mesh(cylinderGeom, materialFor(colorB));
-        meshB.scale.set(0.09, half, 0.09);
         meshB.quaternion.copy(quat);
         meshB.position.copy(mid).addScaledVector(dir, 0.25);
         meshB.userData.bond = bondInfo;
@@ -470,9 +475,9 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
         group.add(meshB);
         bondMeshes.push(meshB);
 
-        wireframePositions.push(pa.x, pa.y, pa.z, mid.x, mid.y, mid.z);
+        wireframePositions.push(a.pos.x, a.pos.y, a.pos.z, mid.x, mid.y, mid.z);
         pushWireColor(colorA);
-        wireframePositions.push(mid.x, mid.y, mid.z, pb.x, pb.y, pb.z);
+        wireframePositions.push(mid.x, mid.y, mid.z, b.pos.x, b.pos.y, b.pos.z);
         pushWireColor(colorB);
       }
       bondMeshesRef.current = bondMeshes;
