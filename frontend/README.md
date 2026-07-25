@@ -46,9 +46,8 @@ __tests__/               CIF parser tests
   password is never cached). If the device has no biometric hardware/enrollment, the
   biometric option is hidden and password is the only path — per the subject.
 
-## Known follow-ups (not in this pass)
+## Brand assets
 
-- App icon + native launch screen are still Expo's placeholder assets (`assets/`) —
-  VI.1 wants a themed icon/splash image, this pass only wired the splash *background
-  color* and the in-app animated splash.
-- `HomeScreen` is a stub landing screen; the ligand list + 3D viewer replace it next.
+The app icon, Android adaptive/monochrome icon layers, favicon, and native splash
+mark use the molecular Swifty Protein identity in `assets/`. The native splash is
+followed by the animated in-app splash while the secure session is initialized.
