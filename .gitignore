@@ -27,6 +27,8 @@ android/
 !debug.keystore
 *.apk
 *.aab
+# ...except the delivered release build, which the subject expects in the repo.
+!dist/app-release.apk
 
 # ===== Env / secrets =====
 .env
@@ -42,6 +44,10 @@ android/
 .idea/
 .DS_Store
 Thumbs.db
+
+# ===== Python (scripts/gen-icons.py) =====
+__pycache__/
+*.pyc
 
 # ===== Test / coverage =====
 coverage/

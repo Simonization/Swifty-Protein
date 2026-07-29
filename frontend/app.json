@@ -9,6 +9,11 @@
     "backgroundColor": "#0A0E17",
     "scheme": "swiftyprotein",
     "ios": {
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/ios-icon-dark.png",
+        "tinted": "./assets/ios-icon-tinted.png"
+      },
       "supportsTablet": true,
       "infoPlist": {
         "NSFaceIDUsageDescription": "Swifty Protein uses Face ID to unlock the app quickly and securely."
@@ -32,7 +37,7 @@
         {
           "backgroundColor": "#0A0E17",
           "image": "./assets/splash-icon.png",
-          "imageWidth": 160
+          "imageWidth": 220
         }
       ],
       [

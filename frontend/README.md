@@ -68,14 +68,29 @@ TypeScript; `data/ligands.ts` is where the cache and the network are composed.
 ## Icon and launch screen (VI.1)
 
 The launcher icon, the three Android adaptive layers (foreground, background,
-monochrome), the favicon and the native splash mark all carry the same molecular
-Swifty Protein identity. They are **generated**, not hand-drawn: run
-`python3 scripts/gen-icons.py` (needs `pillow` + `numpy`), which renders every asset
-in `assets/` from the single molecule definition at the top of that script.
-Regenerate rather than editing the PNGs, or they drift apart.
+monochrome), the two iOS 18 appearance variants, the favicon and the native splash
+mark all carry the same identity. They are **generated**, not hand-drawn: run
+`python3 scripts/gen-icons.py` (needs `pillow` + `numpy`, takes ~3 min), which
+renders every asset in `assets/` from the single `RING` definition at the top of
+that script. Regenerate rather than editing the PNGs, or they drift apart.
 
-The mark is a shaded ball-and-stick molecule in CPK colours over the app's own
-palette, so the native launch screen hands over to the in-app animated splash
-without a visible change of identity. The launch screen itself is
-`expo-splash-screen` (mark + `backgroundColor`, configured in `app.json`), followed
-by `screens/SplashScreen.tsx` while the secure session is initialized.
+The mark is a tilted six-membered ring in CPK colours — the same convention the
+viewer renders with — lit from behind in the app's cyan, over the app's own navy.
+Three things drove that shape:
+
+- **It survives 48px.** `favicon.png` is a downscale of the 1024px icon, and a
+  closed loop keeps its silhouette where radiating bonds turn to mush.
+- **It is near-square** (foreground bbox 552×578), so it fills Android's circular
+  adaptive mask instead of leaving margins down both sides.
+- **The hole is the signature** — the lit centre is what makes the icon findable
+  in a grid of other apps.
+
+Rendering is a small orthographic ray-tracer: spheres and bond cylinders are
+intersected per pixel into a z-buffer, shaded with diffuse + specular + a cyan
+fresnel rim and a cheap analytic ambient occlusion, then supersampled 3× down.
+
+Because the palette comes from `src/theme/theme.ts`, the native launch screen hands
+over to the in-app animated splash without a visible change of identity. The launch
+screen itself is `expo-splash-screen` (mark + `backgroundColor`, configured in
+`app.json`), followed by `screens/SplashScreen.tsx` while the secure session is
+initialized.
