@@ -5,8 +5,14 @@ import { colors, radii, spacing, typography } from '../theme/theme';
 
 export function ErrorBanner({ message }: { message: string }) {
   return (
-    <View style={styles.banner}>
-      <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.danger} />
+    // A banner appears without focus moving to it, so announce it.
+    <View style={styles.banner} accessible accessibilityLiveRegion="assertive" accessibilityRole="alert">
+      <MaterialCommunityIcons
+        name="alert-circle-outline"
+        size={18}
+        color={colors.danger}
+        importantForAccessibility="no"
+      />
       <Text style={styles.text}>{message}</Text>
     </View>
   );

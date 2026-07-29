@@ -12,7 +12,7 @@ interface SearchBarProps {
 export function SearchBar({ value, onChangeText, placeholder = 'Search ligandsâ€¦' }: SearchBarProps) {
   return (
     <View style={styles.row}>
-      <MaterialCommunityIcons name="magnify" size={20} color={colors.textMuted} />
+      <MaterialCommunityIcons name="magnify" size={20} color={colors.textMuted} importantForAccessibility="no" />
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -20,10 +20,17 @@ export function SearchBar({ value, onChangeText, placeholder = 'Search ligandsâ€
         placeholderTextColor={colors.textFaint}
         autoCapitalize="none"
         autoCorrect={false}
+        accessibilityLabel="Search ligands"
+        accessibilityHint="Filters the ligand list as you type"
         style={styles.input}
       />
       {value.length > 0 && (
-        <Pressable onPress={() => onChangeText('')} hitSlop={8}>
+        <Pressable
+          onPress={() => onChangeText('')}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Clear search"
+        >
           <MaterialCommunityIcons name="close-circle" size={18} color={colors.textMuted} />
         </Pressable>
       )}

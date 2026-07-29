@@ -66,8 +66,18 @@ export function SelectionTooltip({ selection }: { selection: Selection }) {
 
 function Tooltip({ dotColor, children }: { dotColor?: string; children: ReactNode }) {
   return (
-    <View style={styles.tooltip} pointerEvents="none">
-      {dotColor ? <View style={[styles.dot, { backgroundColor: dotColor }]} /> : null}
+    // The selection is the viewer's only readout, and it changes without any
+    // focus moving — announce it rather than waiting to be swiped to.
+    <View
+      style={styles.tooltip}
+      pointerEvents="none"
+      accessible
+      accessibilityLiveRegion="polite"
+      accessibilityRole="summary"
+    >
+      {dotColor ? (
+        <View style={[styles.dot, { backgroundColor: dotColor }]} importantForAccessibility="no" />
+      ) : null}
       <View>{children}</View>
     </View>
   );

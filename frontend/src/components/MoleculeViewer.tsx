@@ -559,11 +559,21 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
     return (
       <GestureDetector gesture={composed}>
         <View style={styles.fill} onLayout={onLayout}>
-          <GLView ref={glViewRef} style={styles.fill} onContextCreate={onContextCreate} />
+          <GLView
+            ref={glViewRef}
+            style={styles.fill}
+            onContextCreate={onContextCreate}
+            accessibilityRole="image"
+            accessibilityLabel={`3D model of ${ligand.id}, ${ligand.atoms.length} atoms and ${ligand.bonds.length} bonds`}
+            accessibilityHint="Drag to rotate, pinch to zoom, two fingers to pan, tap an atom for its details"
+          />
           {labelPositions.map((label) => (
+            // Decorative: these repeat the element symbols the tooltip already
+            // reads out, and there are one per atom.
             <Text
               key={label.id}
               pointerEvents="none"
+              importantForAccessibility="no-hide-descendants"
               style={[styles.label, { left: label.x - 10, top: label.y - 8, color: `#${label.color}` }]}
             >
               {label.symbol}

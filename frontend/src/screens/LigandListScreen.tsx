@@ -105,10 +105,20 @@ export function LigandListScreen({ navigation }: Props) {
           <Text style={styles.subtitle}>{LIGAND_IDS.length} entries · RCSB PDB</Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable onPress={() => navigation.navigate('Settings')} hitSlop={8}>
+          <Pressable
+            onPress={() => navigation.navigate('Settings')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
             <MaterialCommunityIcons name="cog-outline" size={22} color={colors.textMuted} />
           </Pressable>
-          <Pressable onPress={() => logout()} hitSlop={8}>
+          <Pressable
+            onPress={() => logout()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Log out"
+          >
             <MaterialCommunityIcons name="logout" size={22} color={colors.textMuted} />
           </Pressable>
         </View>
@@ -181,8 +191,14 @@ function LigandRow({
 }) {
   const subtitle = info ? [info.name, info.formula].filter(Boolean).join(' · ') : null;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-      <View style={styles.rowIcon}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={[id, subtitle, info && 'available offline'].filter(Boolean).join(', ')}
+      accessibilityHint="Opens the 3D viewer"
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    >
+      <View style={styles.rowIcon} importantForAccessibility="no-hide-descendants">
         <MaterialCommunityIcons name="atom" size={18} color={colors.primary} />
       </View>
       <View style={styles.rowText}>
@@ -194,12 +210,19 @@ function LigandRow({
         ) : null}
       </View>
       {info ? (
-        <View style={styles.badge}>
+        <View style={styles.badge} importantForAccessibility="no-hide-descendants">
           <MaterialCommunityIcons name="cloud-check-outline" size={11} color={colors.success} />
           <Text style={styles.badgeText}>Offline</Text>
         </View>
       ) : null}
-      <Pressable onPress={onToggleFavorite} hitSlop={10} style={styles.star}>
+      <Pressable
+        onPress={onToggleFavorite}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel={favorite ? `Remove ${id} from favorites` : `Add ${id} to favorites`}
+        accessibilityState={{ selected: favorite }}
+        style={styles.star}
+      >
         <MaterialCommunityIcons
           name={favorite ? 'star' : 'star-outline'}
           size={20}
@@ -222,9 +245,20 @@ function FilterChip({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      style={[styles.chip, active && styles.chipActive]}
+    >
       {icon ? (
-        <MaterialCommunityIcons name={icon} size={12} color={active ? colors.bg : colors.textMuted} />
+        <MaterialCommunityIcons
+          name={icon}
+          size={12}
+          color={active ? colors.bg : colors.textMuted}
+          importantForAccessibility="no"
+        />
       ) : null}
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </Pressable>

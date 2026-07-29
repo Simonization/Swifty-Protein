@@ -71,7 +71,13 @@ export function LigandViewScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={styles.fill} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8} style={styles.iconButton}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Back to the ligand list"
+          style={styles.iconButton}
+        >
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.text} />
         </Pressable>
         <View style={styles.headerTitle}>
@@ -82,7 +88,15 @@ export function LigandViewScreen({ route, navigation }: Props) {
             </Text>
           )}
         </View>
-        <Pressable onPress={handleShare} hitSlop={8} style={styles.iconButton} disabled={sharing}>
+        <Pressable
+          onPress={handleShare}
+          hitSlop={8}
+          disabled={sharing}
+          accessibilityRole="button"
+          accessibilityLabel={sharing ? 'Preparing image to share' : `Share an image of ${ligand.id}`}
+          accessibilityState={{ disabled: sharing, busy: sharing }}
+          style={styles.iconButton}
+        >
           <MaterialCommunityIcons
             name={sharing ? 'timer-sand' : 'share-variant'}
             size={22}
@@ -96,12 +110,16 @@ export function LigandViewScreen({ route, navigation }: Props) {
           <Pressable
             key={m.key}
             onPress={() => setMode(m.key)}
+            accessibilityRole="button"
+            accessibilityLabel={`${m.label} view`}
+            accessibilityState={{ selected: mode === m.key }}
             style={[styles.modeButton, mode === m.key && styles.modeButtonActive]}
           >
             <MaterialCommunityIcons
               name={m.icon}
               size={16}
               color={mode === m.key ? colors.bg : colors.textMuted}
+              importantForAccessibility="no"
             />
             <Text style={[styles.modeLabel, mode === m.key && styles.modeLabelActive]}>{m.label}</Text>
           </Pressable>
@@ -109,12 +127,36 @@ export function LigandViewScreen({ route, navigation }: Props) {
       </View>
 
       <View style={styles.toolRow}>
-        <Pressable onPress={() => setShowLabels((v) => !v)} style={[styles.toolButton, showLabels && styles.toolButtonActive]}>
-          <MaterialCommunityIcons name="tag-text-outline" size={16} color={showLabels ? colors.bg : colors.textMuted} />
+        <Pressable
+          onPress={() => setShowLabels((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel="Atom labels"
+          accessibilityHint="Shows or hides the element label on every atom"
+          accessibilityState={{ selected: showLabels }}
+          style={[styles.toolButton, showLabels && styles.toolButtonActive]}
+        >
+          <MaterialCommunityIcons
+            name="tag-text-outline"
+            size={16}
+            color={showLabels ? colors.bg : colors.textMuted}
+            importantForAccessibility="no"
+          />
           <Text style={[styles.toolLabel, showLabels && styles.toolLabelActive]}>Labels</Text>
         </Pressable>
-        <Pressable onPress={toggleMeasureMode} style={[styles.toolButton, measureMode && styles.toolButtonActive]}>
-          <MaterialCommunityIcons name="ruler" size={16} color={measureMode ? colors.bg : colors.textMuted} />
+        <Pressable
+          onPress={toggleMeasureMode}
+          accessibilityRole="button"
+          accessibilityLabel="Measure mode"
+          accessibilityHint="Tap two atoms for a distance, three for an angle"
+          accessibilityState={{ selected: measureMode }}
+          style={[styles.toolButton, measureMode && styles.toolButtonActive]}
+        >
+          <MaterialCommunityIcons
+            name="ruler"
+            size={16}
+            color={measureMode ? colors.bg : colors.textMuted}
+            importantForAccessibility="no"
+          />
           <Text style={[styles.toolLabel, measureMode && styles.toolLabelActive]}>Measure</Text>
         </Pressable>
       </View>

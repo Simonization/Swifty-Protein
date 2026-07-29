@@ -61,7 +61,13 @@ export function SettingsScreen({ navigation }: Props) {
       <MoleculeBackdrop />
 
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8} style={styles.iconButton}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={styles.iconButton}
+        >
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.text} />
         </Pressable>
         <Text style={styles.title}>Settings</Text>
@@ -91,6 +97,9 @@ export function SettingsScreen({ navigation }: Props) {
             <Pressable
               key={m.key}
               onPress={() => setDefaultMode(m.key)}
+              accessibilityRole="button"
+              accessibilityLabel={`${m.label} as the default view mode`}
+              accessibilityState={{ selected: defaultMode === m.key }}
               style={[styles.modeChip, defaultMode === m.key && styles.modeChipActive]}
             >
               <Text style={[styles.modeLabel, defaultMode === m.key && styles.modeLabelActive]}>
@@ -108,6 +117,8 @@ export function SettingsScreen({ navigation }: Props) {
           <Switch
             value={showLabelsByDefault}
             onValueChange={setShowLabels}
+            accessibilityLabel="Show atom labels by default"
+            accessibilityHint="Labels can still be toggled per ligand"
             trackColor={{ false: colors.border, true: colors.primary }}
             thumbColor={colors.text}
           />

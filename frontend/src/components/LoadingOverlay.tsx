@@ -6,7 +6,7 @@ export function LoadingOverlay({ visible, label }: { visible: boolean; label: st
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.backdrop}>
-        <View style={styles.card}>
+        <View style={styles.card} accessible accessibilityLiveRegion="polite" accessibilityLabel={label}>
           <ActivityIndicator color={colors.primary} size="large" />
           <Text style={styles.label}>{label}</Text>
         </View>

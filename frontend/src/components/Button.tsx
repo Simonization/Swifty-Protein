@@ -21,6 +21,9 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled,
       <Pressable
         onPress={onPress}
         disabled={isDisabled}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled: isDisabled, busy: loading }}
         style={({ pressed }) => [styles.ghost, pressed && styles.pressed, isDisabled && styles.disabled]}
       >
         {loading ? <ActivityIndicator color={colors.text} /> : (
@@ -34,7 +37,14 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled,
   }
 
   return (
-    <Pressable onPress={onPress} disabled={isDisabled} style={({ pressed }) => [pressed && styles.pressed, isDisabled && styles.disabled]}>
+    <Pressable
+      onPress={onPress}
+      disabled={isDisabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
+      style={({ pressed }) => [pressed && styles.pressed, isDisabled && styles.disabled]}
+    >
       <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primary}>
         {loading ? <ActivityIndicator color={colors.bg} /> : (
           <View style={styles.content}>

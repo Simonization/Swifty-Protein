@@ -22,6 +22,10 @@ export function TextField({ label, error, secure, style, ...inputProps }: TextFi
           {...inputProps}
           secureTextEntry={secure && hidden}
           placeholderTextColor={colors.textFaint}
+          accessibilityLabel={inputProps.accessibilityLabel ?? label}
+          // The error is rendered below the row, where a screen reader would only
+          // reach it after leaving the field it describes.
+          accessibilityHint={error ?? inputProps.accessibilityHint}
           onFocus={(e) => {
             setFocused(true);
             inputProps.onFocus?.(e);
@@ -33,7 +37,12 @@ export function TextField({ label, error, secure, style, ...inputProps }: TextFi
           style={[styles.input, style]}
         />
         {secure && (
-          <Pressable onPress={() => setHidden((h) => !h)} hitSlop={8}>
+          <Pressable
+            onPress={() => setHidden((h) => !h)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={hidden ? `Show ${label}` : `Hide ${label}`}
+          >
             <MaterialCommunityIcons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={20} color={colors.textMuted} />
           </Pressable>
         )}

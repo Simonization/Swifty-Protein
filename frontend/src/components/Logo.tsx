@@ -5,8 +5,11 @@ import { colors, spacing, typography } from '../theme/theme';
 
 export function Logo({ size = 56 }: { size?: number }) {
   return (
-    <View style={styles.wrap}>
-      <View style={[styles.badge, { width: size, height: size, borderRadius: size / 2 }]}>
+    <View style={styles.wrap} accessible accessibilityRole="header" accessibilityLabel="Swifty Protein — molecular structure visualizer">
+      <View
+        style={[styles.badge, { width: size, height: size, borderRadius: size / 2 }]}
+        importantForAccessibility="no-hide-descendants"
+      >
         <MaterialCommunityIcons name="atom" size={size * 0.6} color={colors.primary} />
       </View>
       <Text style={styles.wordmark}>SWIFTY PROTEIN</Text>
