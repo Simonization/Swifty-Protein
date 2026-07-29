@@ -173,7 +173,11 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       ref,
       () => ({
         captureSnapshot: async () => {
-          const snapshot = await glViewRef.current?.takeSnapshotAsync({ flip: false });
+          // Expo GL defaults to JPEG; the share call declares image/png, so ask for PNG.
+          const snapshot = await glViewRef.current?.takeSnapshotAsync({
+            flip: false,
+            format: 'png',
+          });
           return typeof snapshot?.uri === 'string' ? snapshot.uri : null;
         },
       }),
