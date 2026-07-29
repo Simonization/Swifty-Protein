@@ -7,8 +7,10 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { LigandListScreen } from '../screens/LigandListScreen';
 import { LigandViewScreen } from '../screens/LigandViewScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
 import { colors } from '../theme/theme';
 import { useAuth } from '../auth/AuthContext';
+import { useSettings } from '../settings/SettingsContext';
 import type { AuthStackParamList, AppStackParamList } from './types';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -23,6 +25,9 @@ const MIN_SPLASH_MS = 1200;
 
 export function RootNavigator() {
   const { status } = useAuth();
+  // Hold the splash until settings have loaded: the persisted server URL has to
+  // reach the API client before any screen can try to log in.
+  const { ready: settingsReady } = useSettings();
   const [splashElapsed, setSplashElapsed] = useState(false);
 
   useEffect(() => {
@@ -30,7 +35,7 @@ export function RootNavigator() {
     return () => clearTimeout(t);
   }, []);
 
-  const showSplash = status === 'bootstrapping' || !splashElapsed;
+  const showSplash = status === 'bootstrapping' || !settingsReady || !splashElapsed;
 
   return (
     <NavigationContainer theme={navTheme}>
@@ -40,6 +45,7 @@ export function RootNavigator() {
         <AppStack.Navigator screenOptions={{ headerShown: false }}>
           <AppStack.Screen name="LigandList" component={LigandListScreen} />
           <AppStack.Screen name="LigandView" component={LigandViewScreen} />
+          <AppStack.Screen name="Settings" component={SettingsScreen} />
         </AppStack.Navigator>
       ) : (
         <AuthStack.Navigator screenOptions={{ headerShown: false }}>

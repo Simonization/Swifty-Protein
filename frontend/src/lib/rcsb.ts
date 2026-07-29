@@ -1,4 +1,4 @@
-// Fetch a ligand's CIF directly from RCSB and parse it in-app.
+// Fetch a ligand's CIF text from RCSB.
 //
 // Subject-mandated source + URL (protein.md:135, 218):
 //   https://files.rcsb.org/ligands/view/{ligand}.cif
@@ -6,11 +6,10 @@
 // Errors are mapped to typed kinds so the UI can show the differentiated,
 // user-friendly messages the subject requires (protein.md:221-225).
 //
-// Caching for offline access (protein.md:164, bonus VII.4) is a thin wrapper to
-// be added in the app layer (e.g. expo-file-system / AsyncStorage around
-// fetchLigand): on success, persist by code; on offline error, fall back to cache.
-import { parseLigandCif } from './cif';
-import type { Ligand } from '../types';
+// Network and error mapping only: no React Native dependencies, so this stays
+// testable as plain TypeScript. Caching (bonus VII.4) and parsing are composed
+// on top in ../data/ligands.ts, which is the app layer this file always
+// expected to be wrapped by.
 
 export type RcsbErrorKind = 'not_found' | 'offline' | 'timeout' | 'parse';
 
@@ -32,8 +31,10 @@ export class RcsbError extends Error {
 
 const ligandUrl = (code: string): string => `https://files.rcsb.org/ligands/view/${code}.cif`;
 
-export async function fetchLigand(id: string, timeoutMs = 8000): Promise<Ligand> {
-  const code = id.trim().toUpperCase();
+// "atp" -> "ATP". The canonical form used for the URL and as the cache key.
+export const normalizeLigandCode = (id: string): string => id.trim().toUpperCase();
+
+export async function fetchLigandCif(code: string, timeoutMs = 8000): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -50,7 +51,5 @@ export async function fetchLigand(id: string, timeoutMs = 8000): Promise<Ligand>
   if (res.status === 404) throw new RcsbError('not_found');
   if (!res.ok) throw new RcsbError('offline', `RCSB returned ${res.status}. Please try again.`);
 
-  const ligand = parseLigandCif(await res.text(), code);
-  if (ligand.atoms.length === 0) throw new RcsbError('parse');
-  return ligand;
+  return res.text();
 }

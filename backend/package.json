@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Swifty-Proteins backend API (Fastify) — auth, ligand data, element reference.",
+  "description": "Swifty-Proteins backend API (Fastify) — auth only; ligand data and element reference live in the app.",
   "engines": {
     "node": ">=20"
   },

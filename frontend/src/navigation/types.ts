@@ -8,4 +8,5 @@ export type AuthStackParamList = {
 export type AppStackParamList = {
   LigandList: undefined;
   LigandView: { ligand: Ligand };
+  Settings: undefined;
 };

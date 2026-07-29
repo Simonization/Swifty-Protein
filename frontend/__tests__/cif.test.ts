@@ -5,7 +5,8 @@ import { join } from 'path';
 
 import { parseLigandCif } from '../src/lib/cif';
 
-const cif = readFileSync(join(__dirname, 'fixtures', 'FOR.cif'), 'utf8');
+const load = (id: string): string => readFileSync(join(__dirname, 'fixtures', `${id}.cif`), 'utf8');
+const cif = load('FOR');
 
 describe('parseLigandCif', () => {
   it('parses metadata (id, name, formula)', () => {
@@ -34,5 +35,39 @@ describe('parseLigandCif', () => {
     expect(lig.atoms).toHaveLength(0);
     expect(lig.bonds).toHaveLength(0);
     expect(lig.id).toBe('XXX');
+  });
+});
+
+// mmCIF drops `loop_` for single-row categories. The fixtures below are unmodified
+// live RCSB files covering both shapes of that: un-looped atoms, and un-looped bonds.
+describe('parseLigandCif — single-row categories', () => {
+  it('reads the un-looped atom category of a 1-atom ligand (CU)', () => {
+    const lig = parseLigandCif(load('CU'), 'CU');
+    expect(lig.id).toBe('CU');
+    expect(lig.atoms).toHaveLength(1);
+    expect(lig.atoms[0]).toEqual({ id: 1, element: 'Cu', name: 'CU', x: 0, y: 0, z: 0 });
+    expect(lig.bonds).toHaveLength(0);
+  });
+
+  it('reads the un-looped bond category of a 2-atom ligand (OXY)', () => {
+    const lig = parseLigandCif(load('OXY'), 'OXY');
+    expect(lig.atoms).toHaveLength(2);
+    expect(lig.atoms.map((a) => a.element)).toEqual(['O', 'O']);
+    // The bond is what makes this a stick rather than two loose spheres.
+    expect(lig.bonds).toEqual([{ a: 1, b: 2, order: 2 }]);
+  });
+});
+
+describe('parseLigandCif — real-world ligand', () => {
+  it('parses ATP to 47 atoms / 49 bonds', () => {
+    const lig = parseLigandCif(load('ATP'), 'ATP');
+    expect(lig.atoms).toHaveLength(47);
+    expect(lig.bonds).toHaveLength(49);
+    // Every bond resolves to a real atom id (no silent drops from idByName misses).
+    const ids = new Set(lig.atoms.map((a) => a.id));
+    for (const b of lig.bonds) {
+      expect(ids.has(b.a)).toBe(true);
+      expect(ids.has(b.b)).toBe(true);
+    }
   });
 });

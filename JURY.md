@@ -1,86 +1,81 @@
 # Correcting Swifty-Proteins — jury guide
 
-This project is packaged so it can be evaluated **on any computer, with Docker as
-the only required tool**, for years after submission.
-
----
-
-## TL;DR
+Two things to start: the **backend** (Docker) and the **app** (on a phone).
 
 ```bash
-make doctor   # checks your machine — mainly: is Docker installed and running?
-make up       # starts the backend API + database in containers
+make doctor   # checks this machine: Docker running? Node 20+?
+make up       # backend API + database, in containers. Verifies /health before returning.
+
+cd frontend
+npm ci
+npx expo start   # scan the QR code with Expo Go on the phone
 ```
 
-Then install **`dist/app-release.apk`** on an Android phone (or emulator) and
-launch it. The app uses the backend **only for login** (accounts); molecule data
-is fetched live from the RCSB Protein Data Bank, so viewing ligands needs internet
-access but does not depend on the backend.
+The app uses the backend **only for login**. Molecule data is fetched live from the
+RCSB Protein Data Bank, so browsing ligands needs internet but does not depend on
+the backend. Ligands you have already opened are cached and work offline.
 
 ---
 
 ## Requirements
 
-| Requirement | Notes |
+| Requirement | Why |
 |---|---|
-| **Docker + Docker Compose v2** | The only requirement to *run* the backend. |
-| **Android device or emulator** | The app is a phone app; it cannot run inside Docker. |
-| **Internet access** | The app fetches molecule data live from RCSB (previously viewed ligands are cached for offline). |
+| **Docker + Docker Compose v2** | Runs the backend API and its database. |
+| **Node 20+** | Runs `npx expo start`, which serves the app to the phone. |
+| **An Android phone with [Expo Go](https://expo.dev/go)** | The app is a phone app; it cannot run inside Docker. |
+| **Same network** | The phone loads the app from this machine and calls the backend on it. |
+| **Internet access** | Molecule data comes from RCSB, live. |
 
-`make doctor` verifies both and prints install links for your OS if anything is
-missing.
+`make doctor` checks these and prints install links for your OS.
 
 ---
 
 ## Step by step
 
-1. **Check your machine**
+1. **Check the machine**
    ```bash
    make doctor
    ```
 
 2. **Start the backend**
    ```bash
-   make up          # backend API on http://localhost:3000, database alongside it
+   make up          # API on http://localhost:3000, database alongside
    make logs        # (optional) watch the logs
    ```
+   `make up` generates a random `JWT_SECRET` into `.env` on first run, then polls
+   `/health` and fails loudly if the backend did not actually come up.
 
-3. **Install the app** — copy `dist/app-release.apk` to an Android device and
-   install it, or drag it onto a running emulator. The app connects to
-   `http://<your-machine-ip>:3000` (see in-app settings if you need to change
-   the address).
-
-4. **When finished**
+3. **Run the app**
    ```bash
-   make down        # stop and remove containers
+   cd frontend && npm ci && npx expo start
+   ```
+   Scan the QR with Expo Go.
+
+4. **Point the app at this machine.** In the app: **Settings → Backend URL**. Use
+   this machine's LAN IP, e.g. `http://192.168.1.20:3000` — on a phone,
+   `localhost` means *the phone*, so it will never reach the backend. The setting
+   persists.
+
+5. **When finished**
+   ```bash
+   make down
    ```
 
 ---
 
-## Rebuilding the APK from source (optional)
+## What to try
 
-You do **not** need to do this. The APK in `dist/` is the deliverable and it is
-already built. But if you want to verify it yourself, the entire Android toolchain
-(JDK, Node, Android SDK) is containerised, so you still only need Docker:
-
-```bash
-make apk          # builds dist/app-release.apk inside the Android build image
-```
-
----
-
-## APK provenance
-
-| Field | Value |
+| Ligand | Why it's interesting |
 |---|---|
-| File | `dist/app-release.apk` |
-| SHA-256 | *(add before submission: `sha256sum dist/app-release.apk`)* |
-| Built from | *(add before submission: commit hash + `make apk`)* |
-| Min Android | *(add before submission: from build.gradle)* |
+| `ATP` | 47 atoms, 49 bonds — the general case. |
+| `ZN` / `CU` | Single-atom ligands. Their mmCIF omits `loop_`, which the parser handles. |
+| `OXY` | Two atoms, one bond — the bond category is un-looped. |
+| `B12` | 180 atoms including cobalt — exercises the full CPK colour table. |
 
-The binary was committed to the repo rather than hosted externally so that it is
-present immediately on clone, with no dependency on network access or a third-party
-hosting service.
+Also worth exercising: tap an atom (same-element atoms highlight), the four view
+modes, **Measure** (2 atoms = distance, 3 = angle), **Share**, rotating the device,
+and re-opening a viewed ligand in airplane mode.
 
 ---
 
@@ -89,84 +84,49 @@ hosting service.
 ```
 make help      # list all targets
 make doctor    # check dependencies
-make up        # start backend + database (detached)
+make up        # start backend + database (detached), then verify /health
 make down      # stop everything
 make logs      # tail logs
-make apk       # build the APK from source inside Docker
-make clean     # remove containers, volumes, and built APK
+make clean     # remove containers and volumes
 ```
 
 ---
 
-## Why it's built this way
+## Building a standalone APK (optional)
 
-This section explains the design decisions. It is not required reading to evaluate
-the project, but it answers the natural question: *why all this Docker ceremony?*
+There is **no pre-built APK in this repo**, and no `make apk`. This is an Expo
+managed app: it has no `android/` directory, so an APK requires generating one
+first. Two supported routes, both needing network:
 
-### Two distinct risks for long-horizon evaluation
+```bash
+cd frontend
 
-Two different problems threaten a project handed in today but evaluated much later,
-and they need different solutions.
+# Local: generates android/, then builds a debug-signed APK
+npx expo prebuild --platform android
+cd android && ./gradlew assembleDebug
+# -> android/app/build/outputs/apk/debug/app-debug.apk
 
-**Portability (the unknown machine)** — The evaluator's host OS, installed
-toolchain, and library versions are unknown. The classic failure mode is "works on
-my machine." Containerisation eliminates it: the evaluator clones, runs one command,
-and an identical stack comes up regardless of what is installed on the host.
+# Or hosted, no local Android toolchain (needs an Expo account):
+npx eas build --platform android --profile preview
+```
 
-The real gotcha inside this category is **CPU architecture**. If the campus cluster
-runs Apple Silicon (arm64) and images were built or pinned only for amd64, they run
-under emulation (slow, sometimes broken) or fail outright, and vice versa. All base
-images used here publish both architectures through official registries; no
-`--platform` is hard-pinned.
+Neither is needed to evaluate the project — `npx expo start` with Expo Go is the
+path we test and the one above.
 
-**Reproducibility (the two-year gap)** — A Dockerfile is a *recipe*, not a
-*snapshot*. If an evaluator runs `make up` two years from now and Docker has to
-rebuild, it re-runs that recipe and can produce a different result:
+---
 
-- Mutable tags drift. `postgres:latest` or `node:20` will resolve to different
-  images at a later date.
-- `apt-get install` / `npm install` at build time hit live repositories that move,
-  update, or drop packages.
-- Base images can be removed from registries entirely.
+## Notes on reproducibility
 
-**How this project addresses both:**
+The backend stack is containerised, so it comes up the same way regardless of what
+is installed on the host, and both base images publish arm64 and amd64 — no
+`--platform` is hard-pinned, so Apple Silicon and x86 both work.
 
-- Base image versions are **pinned to specific patch releases**
-  (`postgres:16-alpine`, `node:20-bookworm-slim`) rather than floating tags.
-- Application dependencies are installed via a committed **lockfile**
-  (`package-lock.json`), and `npm ci` (not `npm install`) is used to enforce it.
-- The pre-built APK is **committed to the repo** (see below), so the Android
-  toolchain only needs to reproduce if explicitly requested.
+Images are pinned to **exact patch versions** (`postgres:16.14-alpine`,
+`node:20.20.2-bookworm-slim`), not floating tags like `16-alpine`, which resolve to
+different images over time. Dependencies install from committed lockfiles with
+`npm ci`, never `npm install`.
 
-### Why the APK is in `dist/` and not a GitHub Releases attachment
-
-Three options were considered:
-
-| Option | Assessment |
-|---|---|
-| **GitHub Releases attachment** | Reintroduces a network dependency. A Releases attachment is not part of the clone. The evaluator needs working network access to github.com, the release must still exist and be public, and they have to navigate off the README to find it. This contradicts the goal of zero external dependencies. |
-| **Git LFS** | Appears to be the best of both worlds but is a trap: a machine without `git-lfs` installed gets a pointer text file instead of the APK, and the LFS smudge step requires network access to the LFS server. A worse failure mode than either alternative. |
-| **Commit into `dist/`** (chosen) | Present immediately on clone, offline, zero navigation, no external service required. The cost is binary bloat in git history, but committed **once** at final submission it is a bounded, one-time cost (~10–60 MB) — not a recurring problem. |
-
-The APK is committed once, near submission. It is not updated on every build
-iteration; only the final release build goes into the repo.
-
-### Why the APK is universal (not split by ABI)
-
-React Native produces a universal APK by default. This means it runs on arm64
-(most modern Android phones) and x86_64 (most emulators) from a single file.
-The evaluator does not need to know which architecture their device or emulator is;
-there is no "wrong APK" to download.
-
-### Submission checklist (for the team, before handing in)
-
-- [ ] Pin every base image to an exact patch version (already done for `db` and
-      `backend`; verify `frontend/Dockerfile` before submission).
-- [ ] Update the APK provenance table above with the SHA-256 checksum, the commit
-      hash, and the `minSdkVersion`.
-- [ ] Confirm `dist/app-release.apk` is committed and not in `.gitignore`.
-- [ ] Verify `make up` works on a clean clone on a machine that has not seen this
-      project before (or at minimum on a different architecture from the dev
-      machine).
-- [ ] Confirm port 3000 is not conflicting with another service on a typical
-      campus machine; if it is, expose a non-standard port and document it.
+The honest limit: a Dockerfile is a recipe, not a snapshot. `apt-get` and `npm`
+still reach live repositories at build time, and registries can drop images. Exact
+tags narrow the drift; they do not eliminate it. Digest pinning (`@sha256:...`)
+would go further, at the cost of readability.

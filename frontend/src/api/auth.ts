@@ -24,7 +24,3 @@ export function login(username: string, password: string): Promise<AuthResponse>
     body: { username, password },
   });
 }
-
-export function me(token: string): Promise<{ user: User }> {
-  return apiRequest<{ user: User }>('/api/v1/auth/me', { token });
-}

@@ -88,6 +88,15 @@ const colIndex = (loop: Loop, suffix: string): number =>
 const findLoop = (loops: Loop[], prefix: string): Loop | undefined =>
   loops.find((l) => l.headers.some((h) => h.startsWith(prefix)));
 
+// mmCIF omits `loop_` when a category has exactly one row, so it arrives as
+// singles instead: the 1-atom CU ligand un-loops its atoms, and the 2-atom OXY
+// un-loops its single bond. Present that block as a one-row loop.
+function loopFromSingles(singles: Record<string, string>, prefix: string): Loop | undefined {
+  const headers = Object.keys(singles).filter((k) => k.startsWith(prefix));
+  if (headers.length === 0) return undefined;
+  return { headers, rows: [headers.map((h) => singles[h])] };
+}
+
 // "CL" -> "Cl", "o" -> "O"
 function normalizeElement(sym: string | undefined): string {
   if (!sym) return 'X';
@@ -105,8 +114,8 @@ const isMissing = (v: string | undefined): boolean => v === undefined || v === '
 export function parseLigandCif(text: string, fallbackId?: string): Ligand {
   const { singles, loops } = parseDocument(text);
 
-  const atomLoop = findLoop(loops, '_chem_comp_atom.');
-  const bondLoop = findLoop(loops, '_chem_comp_bond.');
+  const atomLoop = findLoop(loops, '_chem_comp_atom.') ?? loopFromSingles(singles, '_chem_comp_atom.');
+  const bondLoop = findLoop(loops, '_chem_comp_bond.') ?? loopFromSingles(singles, '_chem_comp_bond.');
 
   const atoms: Atom[] = [];
   const idByName = new Map<string, number>();

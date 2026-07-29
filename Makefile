@@ -8,7 +8,7 @@ COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compos
 
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor up down logs apk clean
+.PHONY: help doctor up down logs clean
 
 help: ## Show this help
 	@echo "Swifty-Proteins — available commands:"
@@ -16,14 +16,16 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-10s\033[0m %s\n", $$1, $$2}'
 	@echo
-	@echo "Typical jury flow:  make doctor  →  make up  →  install dist/app-release.apk"
+	@echo "Typical jury flow:  make doctor  →  make up  →  cd frontend && npx expo start"
 
 doctor: ## Check that required dependencies are installed
 	@bash scripts/doctor.sh
 
 up: ## Start backend + database (detached)
+	@bash scripts/ensure-env.sh
 	$(COMPOSE) up -d --build db backend
-	@echo ">> Backend on http://localhost:3000  —  now install dist/app-release.apk on a device"
+	@bash scripts/smoke.sh
+	@echo ">> Backend on http://localhost:3000  —  now run the app: cd frontend && npx expo start"
 
 down: ## Stop and remove backend + database containers
 	$(COMPOSE) down
@@ -31,10 +33,5 @@ down: ## Stop and remove backend + database containers
 logs: ## Tail backend + database logs
 	$(COMPOSE) logs -f
 
-apk: ## Build the release APK inside the heavy Android image → dist/app-release.apk
-	$(COMPOSE) --profile build run --rm --build apk-builder
-	@echo ">> Done. APK at dist/app-release.apk"
-
-clean: ## Remove containers, volumes, and built artifacts
-	$(COMPOSE) --profile build down -v
-	@rm -f dist/*.apk
+clean: ## Remove containers and volumes
+	$(COMPOSE) down -v

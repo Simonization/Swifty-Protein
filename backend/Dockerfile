@@ -1,20 +1,22 @@
 # =============================================================================
-# Swifty-Proteins — Backend API (Simon)
+# Swifty-Proteins — Backend API (Fastify)
 #
-# Placeholder Node image. Swap the runtime if a non-Node framework is chosen in
-# Week 1 — only this file + the compose 'backend' service need to change.
+# Runs the auth API. Ligand fetch/parse lives in the RN app, not here.
 # =============================================================================
-FROM node:20-bookworm-slim
+# Exact patch, not `20-bookworm-slim`: that tag drifts as 20.x moves.
+FROM node:20.20.2-bookworm-slim
 
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Dependency layer (cached unless package*.json changes)
+# Dependency layer (cached unless package*.json changes). NODE_ENV=production
+# above already implies --omit=dev, but it is spelled out so the intent survives
+# a change to that line.
 COPY package*.json ./
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else echo ">> no package-lock yet — scaffold the backend first"; fi
+RUN npm ci --omit=dev
 
+# .dockerignore keeps the host node_modules from landing on top of that install.
 COPY . .
 
 EXPOSE 3000
-# Adjust to the real entrypoint once the backend is scaffolded.
 CMD ["node", "src/index.js"]

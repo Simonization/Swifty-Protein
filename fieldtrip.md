@@ -1,5 +1,13 @@
 # Field Trip Report & Architecture Decision
 
+> **Historical record — written 2026-06-24, kept as an ADR. Do not read as current
+> state.** The decision it reaches (fetch + parse in the app, backend auth-only) was
+> carried out and still stands; the plan sections describing it as upcoming work are
+> done. Details that were true when written and are not now: "Frontend is unstarted"
+> (the app exists), and the file layout it sketches (`src/lib/errors.js`, `src/cache/*`,
+> `src/three/*`) was never built under those names. For current state see
+> [`README.md`](README.md), [`API.md`](API.md), and [`JURY.md`](JURY.md).
+
 ## The headline tension
 
 - The adversarial audit (Agent 1) says: our backend relocates two mandatory mobile

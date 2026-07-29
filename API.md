@@ -8,9 +8,11 @@
 
 The contract between **Rodolfo's React Native app** and **Simon's backend**.
 
-- **Base URL:** `http://<host>:3000/api/v1`
+- **Base URL:** `http://<host>:3000/api/v1` — set in-app under **Settings → Backend URL**.
 - **Format:** JSON in, JSON out (`Content-Type: application/json`).
 - **Auth:** `Authorization: Bearer <jwt>` on protected routes.
+- **Token lifetime:** issued tokens carry an `exp` claim, 7 days by default
+  (`JWT_TTL` overrides). An expired token is a `401`; the user logs in again.
 - **Versioning:** path-prefixed (`/api/v1`) so v2 can coexist later.
 
 ---
@@ -66,29 +68,37 @@ Create an account. **Public.**
 `401 invalid_credentials` on a wrong username/password.
 
 #### `GET /api/v1/auth/me`
-Validate the current token / fetch the user. **Protected.** Handy for the
-"re-authenticate on foreground" flow. → `200 { "user": User }`
+Validate the current token / fetch the user. **Protected.** → `200 { "user": User }`
+
+`401 unauthorized` if the token is missing, invalid, expired — or valid but its
+user no longer exists (a dead session, not a success with an empty user).
+
+> The app does not currently call this: the backend is auth-only and ligand data
+> comes straight from RCSB, so nothing after login needs the token. It stays part
+> of the contract (and is tested) for any client that wants to validate a session.
 
 ---
 
 ## App-side molecular data (no backend involved)
 
-The app owns the ligand pipeline. The shared, framework-agnostic modules live in
-the frontend and are unit-tested:
+The app owns the ligand pipeline. `lib/` holds no React Native imports, so it stays
+testable as plain TypeScript; the cache and network are composed on top in `data/`.
 
-| Concern | Where |
-|---------|-------|
-| Molecular types (`Atom`, `Bond`, `Ligand`, `Element`) | `frontend/src/types.ts` |
-| CIF parser (`parseLigandCif`) | `frontend/src/lib/cif.ts` |
-| RCSB fetch + typed errors (`fetchLigand`) | `frontend/src/lib/rcsb.ts` |
-| CPK colors + vdW radii (`getElement`, `elementFor`) | `frontend/src/data/elements.ts` |
-| Parser tests | `frontend/__tests__/cif.test.ts` |
+| Concern | Where | Tested |
+|---------|-------|--------|
+| Molecular types (`Atom`, `Bond`, `Ligand`, `Element`) | `frontend/src/types.ts` | — |
+| CIF parser (`parseLigandCif`) | `frontend/src/lib/cif.ts` | `__tests__/cif.test.ts` |
+| RCSB fetch + typed errors (`fetchLigandCif`) | `frontend/src/lib/rcsb.ts` | via `ligands.test.ts` |
+| Load policy: cache → network → parse (`loadLigand`) | `frontend/src/data/ligands.ts` | `__tests__/ligands.test.ts` |
+| Offline CIF cache | `frontend/src/data/ligandCache.ts` | mocked in `ligands.test.ts` |
+| CPK colors + vdW radii (`elementFor`) | `frontend/src/data/elements.ts` | — |
 
-Notes for the frontend (Rodolfo):
-- **Token storage:** keep the JWT in secure storage (Keychain / Android Keystore).
-  Re-auth on foreground = biometric unlock + optionally `GET /auth/me`.
-- **Ligand view:** `fetchLigand(id)` returns a parsed `Ligand` (`atoms[]` + `bonds[]`)
-  or throws an `RcsbError` whose `.kind` (`not_found`/`offline`/`timeout`/`parse`)
-  already carries the subject's user-facing message.
+Notes for the frontend:
+- **Token storage:** the JWT lives in secure storage (Keychain / Android Keystore).
+  Re-auth on foreground is a local biometric unlock; it does not hit the server, so
+  a viewed ligand still opens offline.
+- **Ligand view:** `loadLigand(id)` returns a parsed `Ligand` (`atoms[]` + `bonds[]`),
+  serving a cached copy when there is one, or throws an `RcsbError` whose `.kind`
+  (`not_found`/`offline`/`timeout`/`parse`) already carries the user-facing message.
 - **Rendering:** color atoms via `elementFor(atom.element).cpkHex`; size spheres by
   `.radius`; draw bonds as sticks, using `bond.order` (and `bond.aromatic`).

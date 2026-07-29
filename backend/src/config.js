@@ -5,6 +5,7 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   host: process.env.HOST ?? '0.0.0.0',
   jwtSecret: process.env.JWT_SECRET ?? DEV_SECRET,
+  jwtTtl: process.env.JWT_TTL ?? '7d',
   databaseUrl: process.env.DATABASE_URL ?? null,
   isProd: process.env.NODE_ENV === 'production',
 };

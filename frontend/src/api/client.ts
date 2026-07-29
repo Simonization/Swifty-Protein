@@ -1,7 +1,24 @@
 // Thin client for the auth-only backend (see ../../../API.md for the contract).
-// Set EXPO_PUBLIC_API_URL to point at the backend, e.g. http://192.168.1.20:3000
-// (a LAN IP, not "localhost", when testing on a physical device).
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+//
+// EXPO_PUBLIC_API_URL is inlined at build time, and its default points at the
+// device itself -- useless on a real phone, where the backend is on someone
+// else's laptop. So it is only the default here: Settings can override it at
+// runtime (bonus VII.2), which is what makes a built app usable on a device
+// that was not the one that built it.
+const stripTrailingSlash = (url: string): string => url.replace(/\/$/, '');
+
+export const DEFAULT_API_BASE_URL = stripTrailingSlash(
+  process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000',
+);
+
+let apiBaseUrl = DEFAULT_API_BASE_URL;
+
+export const getApiBaseUrl = (): string => apiBaseUrl;
+
+// Applied at startup from persisted settings, and on every save.
+export function setApiBaseUrl(url: string): void {
+  apiBaseUrl = stripTrailingSlash(url.trim()) || DEFAULT_API_BASE_URL;
+}
 
 export type ApiErrorCode =
   | 'validation_error'
@@ -34,23 +51,19 @@ export class ApiError extends Error {
 interface RequestOptions {
   method?: 'GET' | 'POST';
   body?: unknown;
-  token?: string;
   timeoutMs?: number;
 }
 
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, token, timeoutMs = 10000 } = opts;
+  const { method = 'GET', body, timeoutMs = 10000 } = opts;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, {
+    res = await fetch(`${apiBaseUrl}${path}`, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
@@ -64,7 +77,17 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   }
 
   const text = await res.text();
-  const json = text ? JSON.parse(text) : null;
+  let json: any = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      // A 502 page, a captive portal, or any proxy in front of the API answers
+      // with HTML. Report that as an ApiError like every other failure here,
+      // rather than throwing a raw SyntaxError past the model callers handle.
+      throw new ApiError('internal_error', FRIENDLY_MESSAGES.internal_error!, res.status);
+    }
+  }
 
   if (!res.ok) {
     const code: ApiErrorCode = json?.error?.code ?? 'internal_error';

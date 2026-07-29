@@ -62,6 +62,22 @@ test('GET /me requires a valid token', async () => {
   assert.equal(withAuth.json().user.username, 'dave');
 });
 
+test('issued tokens carry an expiry', async () => {
+  const token = (await register('frank', 'supersecret')).json().token;
+  const claims = app.jwt.decode(token);
+  assert.ok(claims.exp, 'expected an exp claim — tokens must not be valid forever');
+  assert.ok(claims.exp > claims.iat, 'exp must be after iat');
+});
+
+test('GET /me -> 401 when the token is valid but its user is gone', async () => {
+  // A well-signed token whose subject was never (or is no longer) a user: the
+  // token verifies, so this reaches the handler.
+  const token = app.jwt.sign({ sub: 'no-such-user-id', username: 'ghost' });
+  const res = await app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: { authorization: `Bearer ${token}` } });
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.json().error.code, 'unauthorized');
+});
+
 test('validation: short password -> 400 validation_error', async () => {
   const res = await register('eve', 'short');
   assert.equal(res.statusCode, 400);

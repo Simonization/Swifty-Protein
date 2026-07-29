@@ -16,7 +16,9 @@ export async function buildApp(opts = {}) {
   await app.register(cors, { origin: true });
 
   // JWT: adds reply.jwtSign() and request.jwtVerify().
-  await app.register(jwt, { secret: config.jwtSecret });
+  // expiresIn is set here rather than per-call so no route can mint an eternal
+  // token by forgetting it. Documented in API.md.
+  await app.register(jwt, { secret: config.jwtSecret, sign: { expiresIn: config.jwtTtl } });
 
   // Reusable guard for protected routes: `{ preHandler: app.authenticate }`.
   app.decorate('authenticate', async (request, reply) => {

@@ -9,12 +9,10 @@ import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { colors, spacing, typography } from '../theme/theme';
 import { useAuth, describeAuthError } from '../auth/AuthContext';
+import { validatePassword, validateUsername } from '../auth/credentials';
 import type { AuthStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
-
-const MIN_USERNAME = 3;
-const MIN_PASSWORD = 8;
 
 export function LoginScreen({ navigation }: Props) {
   const { status, user, biometrics, loginWithPassword, unlockWithBiometrics, logout } = useAuth();
@@ -50,11 +48,8 @@ export function LoginScreen({ navigation }: Props) {
 
   const effectiveUsername = locked ? user?.username ?? '' : username;
 
-  const validate = (): string | null => {
-    if (effectiveUsername.trim().length < MIN_USERNAME) return `Username must be at least ${MIN_USERNAME} characters.`;
-    if (password.length < MIN_PASSWORD) return `Password must be at least ${MIN_PASSWORD} characters.`;
-    return null;
-  };
+  const validate = (): string | null =>
+    validateUsername(effectiveUsername) ?? validatePassword(password);
 
   const submit = async () => {
     setError(null);
