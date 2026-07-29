@@ -1,30 +1,38 @@
 # Swifty Protein — repository verdict
 
-Audit date: 2026-07-25  
+Original audit: 2026-07-25 (rperez-t), against `main` at `71b8790`.
+Revised: 2026-07-29, after `simon-review` was merged at `aa76f32`.
 Scope: the repository as committed, assessed against the supplied Swifty Protein v6.0 subject.
+
+> **Why this file changed.** The original audit was accurate about the tree it could
+> see. It could not see `simon-review` — 23 commits that had been sitting unmerged on
+> a branch since 2026-07-16, and which close nine of its findings outright. The
+> verdict below is the same document, re-graded against the merged tree, with every
+> row that changed pointing at the commit that changed it. Findings that survived the
+> merge are kept, unsoftened.
 
 ## Final verdict
 
-| Part | Verdict |
-|---|---|
-| Mandatory | **FAIL — not submission-ready** |
-| Bonus | **NOT ELIGIBLE** because the subject evaluates bonuses only when the mandatory part is perfect |
+| Part | Original (2026-07-25) | Now |
+|---|---|---|
+| Mandatory | **FAIL — not submission-ready** | **PASS in source — one delivery blocker left** |
+| Bonus | **NOT ELIGIBLE** | **ELIGIBLE once the APK ships** |
 
-There is a considerable amount of relevant implementation, especially in the ligand
-list, authentication design, CIF pipeline, and 3D viewer. However, the committed
-project cannot currently be delivered through its documented path:
+Two of the three original blockers are gone:
 
-1. `make up` starts the backend with `NODE_ENV=production`, but Compose provides no
-   `JWT_SECRET`. `backend/src/config.js` deliberately throws in exactly that case,
-   so registration and login cannot work through the documented jury setup.
-2. `dist/app-release.apk` is not present. The APK builder ends with
-   `cd android && ./gradlew assembleRelease`, but `frontend/android` does not exist
-   and the image never runs `expo prebuild`.
-3. No real-device or release-build evidence is included, so crash-free operation,
-   gesture behavior, biometric behavior, sharing, and performance cannot be accepted
-   as “flawless.”
-
-Either delivery blocker prevents a perfect mandatory evaluation.
+1. ~~`make up` starts the backend with `NODE_ENV=production`, but Compose provides no
+   `JWT_SECRET`.~~ **Fixed** (`1881553`). `scripts/ensure-env.sh` generates a random
+   secret into `.env` before Compose starts, and `docker-compose.yml:36` fails loudly
+   with `${JWT_SECRET:?…}` rather than crash-looping. The production guard in
+   `config.js` was kept — it did its job.
+2. `dist/app-release.apk` is still not present. **This blocker stands, and is the
+   only one left.** The Dockerfile that pretended to build it was deleted (`6bdf722`)
+   rather than repaired, because it ran `./gradlew assembleRelease` against a
+   `frontend/android` directory that never existed. See the handoff section below.
+3. ~~No real-device or release-build evidence.~~ **Still true**, and still the reason
+   nothing below is certified as "flawless." But it is now a testing gap rather than
+   a delivery blocker: the app can be run from `npx expo start` against a working
+   backend, which it could not before.
 
 ## Mandatory assessment
 
@@ -32,213 +40,218 @@ Either delivery blocker prevents a perfect mandatory evaluation.
 
 | Requirement | Status | Evidence and assessment |
 |---|---|---|
-| Mobile platform and modern stack | **Partial** | React Native/Expo is an authorized multiplatform choice. `expo@57.0.2`, React Native 0.86, and React 19.2.3 match the current Expo SDK 57 compatibility table. The provided build image is not compatible with that setup: it uses Node 20 and Android platform/build-tools 34, while Expo SDK 57 documents Node 22.13+ and Android compile/target SDK 36. |
+| Mobile platform and modern stack | **Partial** | React Native/Expo is an authorized multiplatform choice. `expo@57.0.2`, React Native 0.86 and React 19.2.3 match the Expo SDK 57 compatibility table. The incompatible build image (Node 20, Android SDK 34) that this row originally flagged no longer exists; whatever replaces it must target Node 22.13+ and compile/target SDK 36. |
 | RCSB `.cif` retrieval | **Present** | `frontend/src/lib/rcsb.ts` uses the required `https://files.rcsb.org/ligands/view/{ligand}.cif` endpoint. |
-| Own CIF parser | **Present, limited** | `frontend/src/lib/cif.ts` parses `_chem_comp_atom` and `_chem_comp_bond`, metadata, coordinates, orders, and aromatic flags. It is a pragmatic subset rather than a full CIF parser. It does not validate non-finite coordinates or support all CIF multiline/wrapped constructs. |
-| Responsive UI | **Present in source** | Flex layouts, `SafeAreaView`, `FlatList`, scrolling login/register views, and unrestricted orientation are used. Tablet support is enabled. Runtime behavior was not verified. |
-| Asynchronous network and responsive UI | **Partial** | Network requests use `fetch`, `AbortController`, and loading UI. CIF parsing is synchronous on the React Native JavaScript thread, with no worker/background parser or size guard for large files. |
-| Graceful errors | **Mostly present** | Ligand 404, timeout, offline, and empty-parse cases have user-facing alerts. All non-404 HTTP failures are classified as “offline,” and malformed successful JSON from the auth backend can escape as a generic error. Large-file/memory handling is absent. |
-| Secure account storage | **Present in design** | Passwords are hashed with Argon2id in `backend/src/lib/password.js`; JWT/user state uses `expo-secure-store`. Passwords are not stored by the app. The documented backend deployment is nevertheless broken by the missing production JWT secret, and the documented device API uses plain HTTP. |
-| Accessibility | **Weak/partial** | Contrast and readable labels are considered, but icon-only controls and custom pressables generally have no explicit accessibility labels, roles, or hints. |
-| Real-device testing | **Not evidenced** | There is no APK, device-test report, profiling output, or reproducible release run in the repository. |
-
-Current Expo compatibility reference:
-[Expo SDK reference](https://docs.expo.dev/versions/latest/).
+| Own CIF parser | **Present** | `frontend/src/lib/cif.ts` parses `_chem_comp_atom` and `_chem_comp_bond`, metadata, coordinates, orders and aromatic flags. It now also reads **single-row categories**, which mmCIF writes without `loop_` (`c0bf98b`) — the original audit did not catch that this was broken, and it took out 23 of 24 single-atom ion ligands. Still a pragmatic subset: it does not validate non-finite coordinates, and does not support every CIF multiline construct. |
+| Responsive UI | **Present in source** | Flex layouts, `SafeAreaView`, `FlatList`, scrolling login/register views, unrestricted orientation, tablet support. Runtime behavior still not verified. |
+| Asynchronous network and responsive UI | **Partial** | `fetch`, `AbortController` and loading UI. CIF parsing is still synchronous on the JS thread, with no worker and **no size guard** — `fetchLigandCif` has an 8s timeout but no response-size or atom-count limit. Unchanged. |
+| Graceful errors | **Present** | Ligand 404, timeout, offline and empty-parse cases all have user-facing alerts. Non-JSON response bodies are now classified as `ApiError` rather than escaping as a raw `SyntaxError` (`cce954a`). Large-file/memory handling is still absent. |
+| Secure account storage | **Present** | Argon2id in `backend/src/lib/password.js`; JWT/user state in `expo-secure-store`; passwords never stored by the app. Tokens now carry an expiry (`5db5b2c`) — `app.js:21` signs with `expiresIn: config.jwtTtl`, default `7d` — and `/me` returns 401, not `200 {"user": null}`, when a valid token outlives its user. The documented device API is still plain HTTP. |
+| Accessibility | **Present** | Was **Weak/partial**: the frontend had no `accessibilityLabel` or `accessibilityRole` anywhere. Every control now carries one, labelled centrally in `Button`, `TextField` and `SearchBar`. Stateful toggles report `accessibilityState.selected`; the selection tooltip, error banner and loading overlay are live regions; the GL surface describes the molecule and its gestures. Not yet verified with TalkBack/VoiceOver on hardware. |
+| Real-device testing | **Not evidenced** | Still no APK, device-test report, or profiling output. **Unchanged and still the weakest row.** |
 
 ### VI.1 Application Icon and Launch Screen — **PASS IN SOURCE**
 
-- `frontend/assets/icon.png` now contains a custom molecular/scientific app icon,
-  with a clear ball-and-stick protein-chain mark and CPK-inspired atom colors.
-- Android has matching adaptive foreground, monochrome, and navy background assets.
-- `frontend/assets/splash-icon.png` contains a transparent version of the same
-  molecular mark rather than Expo template artwork.
-- `frontend/app.json` configures the final icon and splash paths, and
-  `frontend/src/navigation/RootNavigator.tsx` keeps an in-app splash visible for
-  at least 1.2 seconds.
-- `frontend/src/screens/SplashScreen.tsx` provides an animated, thematic in-app
-  splash.
+The icon set was drawn twice, independently, and the merge resolved it into one mark
+that takes from both. Rather than picking a winner:
 
-The repository now satisfies the icon and launch-screen implementation requirements.
-The generated native splash still needs confirmation in the final release build on
-a physical device.
+- **Kept from rperez-t's set** (`71b8790`): CPK colouring, so the icon uses the same
+  convention the viewer renders with, and the cyan glow that gives it a signature.
+- **Kept from simon-review's set** (`d32e82c`): generation from
+  `frontend/scripts/gen-icons.py`, so every asset derives from one definition and
+  cannot drift; and a near-square mark that fills Android's adaptive mask.
+- **New**: the mark is now a tilted six-membered ring, chosen because a closed loop
+  keeps its silhouette at the 48px favicon size where radiating bonds mush, and
+  because the lit hole is what makes the icon findable on a home screen. The
+  foreground layer measures 552×578 (aspect 0.96) and fits the 66/108 safe zone —
+  the original hand-drawn foreground was 333×583 (aspect 0.57) and left large
+  margins under a circular mask.
+- Rendering is an orthographic ray-tracer with z-buffered spheres and bond cylinders,
+  diffuse + specular + cyan fresnel rim, analytic ambient occlusion, supersampled 3×.
+- **Added**: iOS 18 appearance variants (`ios.icon` → `light`/`dark`/`tinted` in
+  `app.json`), which neither original set had.
+- `frontend/src/screens/SplashScreen.tsx` still provides the animated in-app splash,
+  and `RootNavigator.tsx` keeps it visible for at least 1.2 seconds.
 
-### VI.2 Login View — **IMPLEMENTED IN SOURCE, END-TO-END FAIL**
+The generated native splash still needs confirmation in a release build on a device.
 
-Implemented:
+### VI.2 Login View — **PASS IN SOURCE**
 
-- Account registration and password login.
-- Unique username constraint in PostgreSQL.
-- Eight-character minimum password and Argon2id storage.
-- Face/fingerprint capability and enrollment checks through
-  `expo-local-authentication`.
-- Clear biometric failure alerts and password fallback.
-- Hidden biometric option when unavailable.
-- Secure JWT/profile storage through `expo-secure-store`.
-- Cold-start lock and foreground/background re-lock through the `AppState` state
-  machine in `frontend/src/auth/AuthContext.tsx`.
+Was *implemented in source, end-to-end fail*. Both deployment defects are fixed:
 
-Blocking deployment defects:
+- `make up` no longer crash-loops — see blocker 1 above.
+- The app is no longer nailed to a build-time `http://localhost:3000`. `SettingsScreen.tsx`
+  plus `settings/SettingsContext.tsx` give a runtime-overridable server URL (`2cf0d65`),
+  which is what makes an installed APK able to reach the evaluator's machine at all.
+  `JURY.md`'s claim that this screen exists is now true.
 
-- `backend/Dockerfile` sets `NODE_ENV=production`.
-- `docker-compose.yml` does not pass `JWT_SECRET`.
-- `backend/src/config.js` throws when production uses the default secret.
-- Therefore the backend service used for both account creation and password login
-  exits during startup.
-- The app defaults to `http://localhost:3000`. That points to the phone itself on a
-  physical device. `JURY.md` claims an in-app setting exists to change the address,
-  but there is no Settings screen or runtime API URL control.
+Everything the original audit listed as implemented still is: registration, unique
+usernames, 8-character minimum, Argon2id, `expo-local-authentication` capability and
+enrollment checks, biometric failure alerts with password fallback, hidden biometric
+option when unavailable, secure JWT storage, cold-start lock.
 
-The authentication architecture is sensible, but the committed evaluation path
-does not provide a working login system.
+One correctness fix the original audit did not catch: re-lock fired on `inactive`,
+not `background` (`bee280d`). iOS raises `inactive` for the share sheet, Control
+Centre and notification banners — so sharing a ligand ejected the user to the Login
+screen mid-action. That broke mandatory VI.4 Share as well as VI.2.
 
 ### VI.3 Protein List View — **STRONG STATIC IMPLEMENTATION; NOT RUNTIME-VERIFIED**
 
-Implemented:
+Unchanged from the original audit, which was accurate: 1,243 identifiers, `FlatList`
+virtualization, case-insensitive per-keystroke search, blocking loading overlay,
+full error taxonomy, no concurrent selections.
 
-- The source `ligands.txt`, app asset copy, and generated `LIGAND_IDS` were compared:
-  all contain the same **1,243 identifiers in the same order**.
-- `FlatList` supplies a scrollable, virtualized list.
-- Search updates on every keystroke, is case-insensitive, and searches identifiers.
-- Selection shows a blocking loading overlay for the complete fetch/parse flow.
-- RCSB fetch, CIF parse, navigation, timeout, 404, offline, and parse alerts exist.
-- Concurrent selections are prevented while a ligand is loading.
+Two things improved since:
 
-Remaining concerns:
+- Rows now show a cached ligand's name and formula, and an "Offline" badge — the only
+  visible sign that the cache exists (`5e59983`).
+- The test suite grew from 4 CIF tests to **21 tests across 3 suites** (`cif`,
+  `client`, `ligands`), with `CU.cif` / `OXY.cif` / `ATP.cif` fixtures covering the
+  single-row parse cases and the ATP 47-atom/49-bond regression.
 
-- Parser execution is synchronous on the JavaScript thread.
-- There is no response-size or atom-count limit for memory protection.
-- Only the small `FOR.cif` parser fixture is tested; fetch/error/list integration is
-  not covered.
-- No executable test or real-device run could be completed during this audit.
+Remaining concerns, all unchanged: parsing is synchronous on the JS thread, there is
+no response-size or atom-count limit, and no run on real hardware.
 
-### VI.4 Protein View — **SUBSTANTIAL STATIC IMPLEMENTATION; NOT PROVEN FLAWLESS**
+> Note on the original audit's method: it reported "attempted the frontend test suite,
+> but this host's Snap-installed Node/npm refuses to execute." The suite does run —
+> `npm ci && npx jest` passes 21/21, and `npx tsc --noEmit` is clean. That was an
+> environment problem, not a repository problem, and it is worth separating the two.
 
-Implemented in `frontend/src/components/MoleculeViewer.tsx` and
-`frontend/src/screens/LigandViewScreen.tsx`:
+### VI.4 Protein View — **SUBSTANTIAL IMPLEMENTATION; STILL NOT PROVEN FLAWLESS**
 
-- Three.js rendering through Expo GL, without a prohibited full game engine.
-- CPK/Jmol colors and element radii.
-- Ball-and-stick spheres and thinner bond cylinders.
-- Atom selection overlay with element, name, and coordinates.
-- Selection dismissal when empty space or another object is tapped.
-- One-finger rotation, pinch zoom, and two-finger pan.
-- Native sharing flow using a captured GL snapshot.
-- Automatic centering/initial camera distance.
-- Ambient, key, and fill lighting.
-- Resource disposal on component unmount.
+Everything the original audit credited is still there. Three of its unresolved risks
+are now resolved:
 
-Unresolved evaluation risks:
+- ~~`sizeRef` correctness.~~ The original audit did not flag this, but the viewer was
+  storing physical pixels from `onContextCreate` and layout dp from `onLayout`, and
+  the GL path won. On any device with `pixelRatio` 2–3 that compressed NDC by 2–3×,
+  so **tap-an-atom hit the wrong atom or nothing at all**, atom labels flew off
+  screen, and rotating the device shrank the viewport. Fixed in `d67d9ea`: `onLayout`
+  is the single writer, always dp, and the pixel ratio is derived from
+  `gl.drawingBufferWidth / layout width` rather than trusting `PixelRatio.get()`.
+- ~~CPK colours cover 16 elements.~~ Now the full 118-element Jmol table with van der
+  Waals radii (`15b3025`). B12's cobalt and the CU/ZN/FE ion ligands rendered hot
+  pink before.
+- ~~Snapshot declares PNG but Expo GL defaults to JPEG.~~ Fixed (`89f35b9`):
+  `takeSnapshotAsync` now passes `format: 'png'`.
 
-- There is no release/device proof of the GL renderer, hit testing, gestures, or
-  sharing.
-- Snapshot capture does not request a format, so Expo GL defaults to JPEG, while
-  the share call declares `image/png`.
-- Every atom and half-bond is an individual mesh/draw object. There is no instancing,
-  LOD, adaptive quality, molecule-size cap, or FPS measurement, so smooth behavior
-  for complex ligands and the requested 60 FPS target are not established.
-- Labels trigger React state updates every fourth render frame and project every atom,
-  which can be expensive for large structures.
+**Still open, and the honest gap in this section:**
+
+- No release/device proof of the GL renderer, hit testing, gestures or sharing.
+- Every atom and half-bond is still an individual mesh. There is **no instancing, no
+  LOD, no adaptive quality, no molecule-size cap and no FPS measurement**, so smooth
+  behaviour on complex ligands and the 60 FPS target remain unestablished. This is
+  the largest piece of unaddressed technical risk in the repository.
+- Label projection was made cheaper (`dc426cd` stopped the RAF loop rebuilding the
+  gesture tree on every label update), but it still projects every atom.
 
 ## Bonus assessment
 
-These items would be ignored by the evaluator until the mandatory blockers above
-are fixed.
+Now eligible, once the APK ships. Three sections change.
 
 ### VII.1 Multiple Visualization Models — **IMPLEMENTED**
 
-All requested modes are present and switch without re-fetching the ligand:
+Unchanged: ball-and-stick, space-filling, wireframe and stick, switching without
+re-fetching. Now also selectable as a persisted default from Settings.
 
-- Ball-and-stick
-- Space-filling using element radii
-- Wireframe
-- Stick
+### VII.2 Advanced User Interface — **MOSTLY IMPLEMENTED**
 
-### VII.2 Advanced User Interface — **PARTIAL**
+Was **Partial**. The missing Settings screen now exists (`2cf0d65`) — server URL,
+default visualization model, default label toggle. Custom ligand rows, animated
+splash and the coherent dark design were already credited.
 
-Present:
+Still missing: an onboarding flow, and colour preferences. The app is still forced
+dark (`userInterfaceStyle: "dark"`), which is a deliberate choice rather than an
+omission, but it does mean there is no light/dark adaptation to demonstrate.
 
-- Custom ligand rows with icons and styled cards.
-- Animated in-app splash and normal native navigation transitions.
-- A coherent app-wide dark visual design.
+### VII.3 Enhanced Molecular Interactions — **IMPLEMENTED**
 
-Missing:
+Unchanged in scope: same-element highlighting, bond type/aromaticity/length,
+two-atom distance and three-atom angle, toggleable labels, double-tap centring.
 
-- Onboarding flow.
-- Settings screen.
-- User-selectable default visualization model or color preferences.
-- Evidence of a complete light/dark appearance adaptation; the app is forced dark.
+Worth noting that these were **silently broken on every real device** until
+`d67d9ea` — they all depend on the same tap-to-atom projection as mandatory VI.4.
+The original audit's "require device validation" caveat was well placed.
 
-### VII.3 Enhanced Molecular Interactions — **MOSTLY IMPLEMENTED**
+The three selection modes were also collapsed into one `Selection` type rendered by
+`SelectionTooltip` (`223cbf8`), since atom, bond and measurement can never be on
+screen together.
 
-Present:
+### VII.4 Performance and Caching — **PARTIAL** (was FAIL / MINIMAL)
 
-- Same-element highlighting after atom selection.
-- Bond selection with type, aromatic state, and length.
-- Two-atom distance and three-atom angle measurement.
-- Toggleable atom labels.
-- Double-tap camera centering animation.
+**Caching now exists.** `frontend/src/data/ligandCache.ts` writes raw `.cif` text to
+`expo-file-system` keyed by ligand id, and `data/ligands.ts` composes cache-then-network
+(`9ea9311`). `rcsb.ts` no longer says "to be added", and `JURY.md`'s offline claim is
+now true. The demo is airplane mode → a previously viewed ligand still opens.
 
-These are meaningful bonus implementations, but their correctness and usability
-still require device validation.
+**Performance is still not addressed**, and the original audit's list stands in full:
+no background parser, no parsing progress, no LOD, no mesh instancing, no
+large-molecule strategy, no FPS instrumentation. Grading this section as anything
+better than partial would be dishonest.
 
-### VII.4 Performance and Caching — **FAIL / MINIMAL**
+### VII.5 Extended Sharing and Export — **PARTIAL** (was NOT IMPLEMENTED)
 
-Present:
+- **Custom share message** — implemented (`9ea9311`). `describeLigand` in
+  `LigandViewScreen.tsx:25` builds name, formula and atom count into the share dialog.
+- **Favorites system** — implemented (`5e59983`), with a filter chip in the list.
+- **PNG/JPEG selection** — the share is now correctly PNG, but the format is not
+  user-selectable.
+- Still absent: 3D export, video recording, side-by-side comparison.
 
-- `FlatList` virtualization and render-window configuration.
-- Some Three.js resource cleanup.
+## Validation performed (this revision)
 
-Missing:
+- Merged `origin/simon-review` into `main`; resolved 7 conflicts, all in the icon set.
+- `npm ci`, then `npx tsc --noEmit` → clean, and `npx jest` → **21 passed, 3 suites**.
+- Regenerated all eight icon assets from `scripts/gen-icons.py` and checked the two
+  things that actually break: the 48px favicon silhouette, and the adaptive foreground
+  bbox against the 66/108 safe zone under circle, squircle and rounded-square masks.
+- Confirmed `docker-compose.yml` now passes `JWT_SECRET`, and that `scripts/ensure-env.sh`
+  generates one.
+- Confirmed the element table carries all 118 elements.
+- Deleted the stale `simon-backend` branch (its only unique commit duplicated a plan
+  doc already on `simon-review`).
+- **Not done:** no Docker build or run, no release build, and nothing on real
+  hardware. Code-presence findings are reliable; runtime behaviour is still
+  explicitly not certified.
 
-- No local `.cif` cache or offline fallback. `frontend/src/lib/rcsb.ts` explicitly
-  says this is “to be added.”
-- No background parser.
-- No parsing progress.
-- No LOD, mesh instancing, or large-molecule strategy.
-- No FPS instrumentation or 60 FPS guarantee.
+## Remaining work
 
-`JURY.md` incorrectly claims previously viewed ligands are cached offline.
+Ordered by what blocks the grade.
 
-### VII.5 Extended Sharing and Export — **NOT IMPLEMENTED**
+1. **Ship the APK.** The only remaining hard blocker — scoped below.
+2. **Test on real hardware.** Tap a corner atom, rotate the device, open the share
+   sheet, run TalkBack/VoiceOver over the new labels. Defects like the px/dp bug only
+   reproduce on a device.
+3. **Profile and bound the viewer.** Pick a large ligand, measure, then add instancing
+   or an atom cap. This is the last section still graded partial for a real reason.
+4. **Guard the parser's inputs.** A response-size or atom-count limit, and non-finite
+   coordinate validation.
+5. **Use HTTPS** for any deployed backend.
 
-Only the mandatory single-image share flow exists. There is no:
+## Handoff: the Android build path (rperez-t)
 
-- Custom share message containing ligand name, atom count, and formula.
-- PNG/JPEG selection or 3D export.
-- Video recording.
-- Favorites system.
-- Side-by-side comparison.
+Taking this on. Starting from nothing, not from a broken file — `frontend/Dockerfile`
+was deleted in `6bdf722` because it provisioned a full pinned Android SDK in order to
+run `cd android && ./gradlew assembleRelease` against a `frontend/android` directory
+that no `expo prebuild` step ever created. It could not have worked, and `make apk`
+plus roughly a third of the old `JURY.md` depended on it.
 
-## Validation performed
+What the path needs:
 
-- Inspected all application, backend, configuration, test, and delivery files.
-- Confirmed all three ligand lists match exactly at 1,243 entries.
-- Confirmed `docker compose config` parses successfully and contains no
-  `JWT_SECRET` for the backend.
-- Confirmed only `dist/.gitkeep` is committed; no APK is present.
-- Confirmed no generated `frontend/android` or `frontend/ios` project exists.
-- Inspected the icon and splash bitmap assets.
-- Attempted the frontend test suite, but this host's Snap-installed Node/npm refuses
-  to execute because `snapd.apparmor` is unavailable; dependencies are not installed.
-- Docker configuration could be inspected, but access to the Docker daemon was not
-  available, so images/containers were not built or run.
+- **Toolchain**: Node 22.13+, Android compile/target SDK 36. The deleted image pinned
+  Node 20 and SDK 34, which the original audit correctly flagged as incompatible with
+  Expo SDK 57.
+- **Native project**: either EAS Build, or `expo prebuild` generating `frontend/android`
+  locally. Decide which, because it changes whether `android/` is committed.
+- **Signing**: package ID and a release keystore, kept out of the repository.
+- **Output**: a committed `dist/app-release.apk` (the `dist/` directory was removed by
+  the merge and needs restoring), and `make apk` restored in the `Makefile`. Note that
+  `.gitignore` carries a blanket `*.apk`; an `!dist/app-release.apk` exception has been
+  added, or the deliverable would have been silently un-committable.
+- **Then**: install the APK on a physical device and walk the corrector's path below.
+  That single run closes remaining item 2 as well.
 
-Accordingly, code-presence findings are reliable, while runtime behavior is explicitly
-not certified by this verdict.
-
-## Required fixes before evaluation
-
-1. Supply `JWT_SECRET` securely to the production backend and prove `make up`,
-   registration, login, and restart persistence work.
-2. Repair the Android build path: use the SDK 57 Node/Android requirements, generate
-   or commit the native Android project, configure package ID/signing, and produce
-   `dist/app-release.apk`.
-3. Configure a physical-device-reachable API endpoint at build time, or implement the
-   Settings screen claimed by `JURY.md`; use HTTPS for a deployed backend.
-4. Explicitly capture PNG when sharing PNG, or pass the correct JPEG MIME type.
-5. Run frontend/backend tests, add integration tests for network errors and auth
-   re-locking, and test the final release on real Android/iOS hardware.
-6. Profile representative small and large ligands, then add instancing/limits or other
-   safeguards needed to keep interaction responsive.
-7. If pursuing the caching bonus, implement actual file caching and offline fallback
-   before advertising it in jury documentation.
+**The corrector's path** — worth running end to end once the APK exists:
+search `ZN` → opens as one correctly-coloured sphere (this failed outright before
+`c0bf98b`); `B12` → cobalt renders right across 180 atoms; `OXY` → two balls **with a
+stick**; `ATP` → 47 atoms; airplane mode → a ligand you already opened still opens.
