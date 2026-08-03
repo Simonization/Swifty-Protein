@@ -36,6 +36,40 @@ describe('parseLigandCif', () => {
     expect(lig.bonds).toHaveLength(0);
     expect(lig.id).toBe('XXX');
   });
+
+  it('does not crash on a loop_ truncated before any rows (EOF mid-file)', () => {
+    const truncated = [
+      'data_BAD',
+      '_chem_comp.id BAD',
+      'loop_',
+      '_chem_comp_atom.comp_id',
+      '_chem_comp_atom.atom_id',
+      '_chem_comp_atom.type_symbol',
+    ].join('\n');
+    const lig = parseLigandCif(truncated, 'BAD');
+    expect(lig.atoms).toHaveLength(0);
+    expect(lig.bonds).toHaveLength(0);
+  });
+
+  it('does not crash when a bond row is shorter than its header list', () => {
+    const shortRow = [
+      'data_BAD',
+      '_chem_comp.id BAD',
+      'loop_',
+      '_chem_comp_atom.comp_id',
+      '_chem_comp_atom.atom_id',
+      '_chem_comp_atom.type_symbol',
+      'BAD C1 C',
+      'loop_',
+      '_chem_comp_bond.comp_id',
+      '_chem_comp_bond.atom_id_1',
+      '_chem_comp_bond.atom_id_2',
+      '_chem_comp_bond.value_order',
+      'BAD "C1"', // missing atom_id_2 / value_order entirely
+    ].join('\n');
+    expect(() => parseLigandCif(shortRow, 'BAD')).not.toThrow();
+    expect(parseLigandCif(shortRow, 'BAD').bonds).toHaveLength(0);
+  });
 });
 
 // mmCIF drops `loop_` for single-row categories. The fixtures below are unmodified
@@ -61,7 +95,7 @@ describe('parseLigandCif — single-row categories', () => {
 // A malformed coordinate token must not propagate NaN/Infinity into the
 // renderer — it degrades to "atom at the ligand center" instead.
 describe('parseLigandCif — non-finite coordinates', () => {
-  const withXToken = (token: string): string =>
+  const withRow = (x: string, y: string, z: string): string =>
     [
       'data_BAD',
       '_chem_comp.id BAD',
@@ -72,18 +106,42 @@ describe('parseLigandCif — non-finite coordinates', () => {
       '_chem_comp_atom.pdbx_model_Cartn_x_ideal',
       '_chem_comp_atom.pdbx_model_Cartn_y_ideal',
       '_chem_comp_atom.pdbx_model_Cartn_z_ideal',
-      `BAD C1 C ${token} 0.000 0.000`,
+      `BAD C1 C ${x} ${y} ${z}`,
     ].join('\n');
 
-  it('falls back to 0 for a non-numeric coordinate token', () => {
-    const lig = parseLigandCif(withXToken('bogus'), 'BAD');
-    expect(lig.atoms).toHaveLength(1);
-    expect(lig.atoms[0].x).toBe(0);
+  it.each([
+    ['non-numeric token', 'bogus'],
+    ['overflows to +Infinity', '1e400'],
+    ['overflows to -Infinity', '-1e400'],
+    ['the literal token "Infinity"', 'Infinity'],
+    ['the literal token "NaN"', 'NaN'],
+  ])('falls back to 0 for %s, in every coordinate column', (_label, token) => {
+    expect(parseLigandCif(withRow(token, '0.000', '0.000'), 'BAD').atoms[0]).toEqual(
+      expect.objectContaining({ x: 0 })
+    );
+    expect(parseLigandCif(withRow('0.000', token, '0.000'), 'BAD').atoms[0]).toEqual(
+      expect.objectContaining({ y: 0 })
+    );
+    expect(parseLigandCif(withRow('0.000', '0.000', token), 'BAD').atoms[0]).toEqual(
+      expect.objectContaining({ z: 0 })
+    );
   });
 
-  it('falls back to 0 for a coordinate that parses to Infinity', () => {
-    const lig = parseLigandCif(withXToken('1e400'), 'BAD');
-    expect(lig.atoms[0].x).toBe(0);
+  it('still resolves every atom and coordinate to a finite number', () => {
+    const lig = parseLigandCif(withRow('1e400', '-1e400', 'bogus'), 'BAD');
+    for (const atom of lig.atoms) {
+      expect(Number.isFinite(atom.x)).toBe(true);
+      expect(Number.isFinite(atom.y)).toBe(true);
+      expect(Number.isFinite(atom.z)).toBe(true);
+    }
+  });
+
+  // Regression guard: the finite-check must not disturb the pre-existing
+  // "missing value" sentinels CIF uses (`?` = unknown, `.` = inapplicable).
+  it('still maps the CIF missing-value sentinels to 0, unchanged', () => {
+    expect(parseLigandCif(withRow('?', '.', '0.000'), 'BAD').atoms[0]).toEqual(
+      expect.objectContaining({ x: 0, y: 0, z: 0 })
+    );
   });
 });
 
