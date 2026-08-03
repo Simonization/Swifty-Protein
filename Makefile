@@ -8,7 +8,7 @@ COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compos
 
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor up down logs clean
+.PHONY: help doctor test up down logs clean
 
 help: ## Show this help
 	@echo "Swifty-Proteins — available commands:"
@@ -20,6 +20,12 @@ help: ## Show this help
 
 doctor: ## Check that required dependencies are installed
 	@bash scripts/doctor.sh
+
+test: ## Run both test suites (backend + app), no Docker needed
+	@echo ">> backend"
+	@cd backend && npm ci --silent && npm test
+	@echo ">> frontend"
+	@cd frontend && npm ci --silent && npx tsc --noEmit && npx jest
 
 up: ## Start backend + database (detached)
 	@bash scripts/ensure-env.sh

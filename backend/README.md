@@ -7,7 +7,8 @@ the app, not here — see `frontend/src/lib/`.
 ## Run locally (without Docker)
 
 ```bash
-npm install
+npm ci             # never `npm install` — the lockfile is the reproducibility guarantee
+cp .env.example .env   # optional; `npm run dev` loads it if present
 npm run dev        # http://localhost:3000 (auto-reload, in-memory accounts)
 ```
 
@@ -35,7 +36,7 @@ src/
   routes/             health · auth
   services/           userStore (memory + Postgres behind one interface)
   lib/                password (Argon2id)
-test/                 node:test auth suite (Fastify inject)
+test/                 node:test suites: auth (Fastify inject) · security · config
 ```
 
 ## What's implemented

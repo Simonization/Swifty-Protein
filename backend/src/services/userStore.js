@@ -17,7 +17,13 @@ export function toPublic(user) {
 const usersByName = new Map(); // username -> { id, username, passwordHash, createdAt }
 const memory = {
   async init() {},
+  // Returns null when the username is taken, mirroring the Postgres path.
+  // A plain `.set()` here silently *overwrote* the first account's id and hash,
+  // which is the same uniqueness bug the UNIQUE constraint catches on the other
+  // path — except nothing catches it, and this is the store `npm run dev` and
+  // every test use.
   async createUser({ username, passwordHash }) {
+    if (usersByName.has(username)) return null;
     const user = { id: randomUUID(), username, passwordHash, createdAt: new Date().toISOString() };
     usersByName.set(username, user);
     return user;
@@ -46,12 +52,18 @@ const postgres = {
       )
     `);
   },
+  // ON CONFLICT DO NOTHING makes the uniqueness check and the insert one
+  // atomic step. Checking first and inserting second leaves a window in which
+  // two concurrent registrations both pass the check; the loser then hit the
+  // UNIQUE constraint, the driver threw, and the error handler turned that into
+  // a 500 rather than the 409 the API documents. Returns null when taken.
   async createUser({ username, passwordHash }) {
     const { rows } = await getPool().query(
-      `INSERT INTO users (id, username, password_hash) VALUES ($1, $2, $3) RETURNING ${COLS}`,
+      `INSERT INTO users (id, username, password_hash) VALUES ($1, $2, $3)
+       ON CONFLICT (username) DO NOTHING RETURNING ${COLS}`,
       [randomUUID(), username, passwordHash],
     );
-    return rows[0];
+    return rows[0] ?? null;
   },
   async findByUsername(username) {
     const { rows } = await getPool().query(`SELECT ${COLS} FROM users WHERE username = $1`, [username]);

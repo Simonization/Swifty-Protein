@@ -21,6 +21,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      # Without this, 5s x 5 is a hard 25s ceiling — and the very first `make up`
+      # has to initialise the data volume before Postgres accepts connections.
+      # On a cold or loaded machine that races, and `backend` gates on this.
+      start_period: 30s
     restart: unless-stopped
 
   backend:
