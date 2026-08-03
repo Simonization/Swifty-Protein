@@ -1,100 +1,84 @@
 # Swifty-Protein
 
-A cross-platform mobile app (**React Native**) for the 42 school *Swifty-Proteins* project.
-It lets a user authenticate, browse a list of ligands, and render the selected
-molecule in interactive 3D (atoms as spheres, bonds as sticks), with per-atom
-info, rotation, multiple render modes, and sharing.
+A cross-platform mobile app (**React Native / Expo**) for the 42 school
+*Swifty-Proteins* project. Log in with biometrics, search 1,243 ligands from the
+RCSB Protein Data Bank, and explore the selected molecule in interactive 3D —
+CPK-coloured ball-and-stick, tap an atom for its element, rotate, zoom, measure,
+and share.
 
-> Stack: **React Native**. (Not Swift / Kotlin — single shared codebase for iOS & Android.)
+> Stack: **React Native** (Expo SDK 57), **three.js** via `expo-gl`, **Fastify** +
+> **Postgres** for accounts. One shared codebase for iOS and Android.
+
+## Run it
+
+The jury guide is [`JURY.md`](JURY.md) — start there. The short version:
+
+```bash
+make doctor   # checks this machine has what it needs
+make up       # backend API + database in Docker, verified healthy before it returns
+make test     # both test suites, no Docker required
+```
+
+Then install the APK on an Android device (see [`JURY.md`](JURY.md)), or run
+`cd frontend && npx expo start` and open it with Expo Go.
+
+> **Note on Expo Go:** the app icon and the native launch screen are applied at
+> build time, so under Expo Go you see *Expo's* icon and splash, not ours. Use the
+> APK to evaluate them.
 
 ## Architecture
 
-The app owns the ligand pipeline; the backend is **auth-only**. This keeps the
+The app owns the ligand pipeline; the backend is **auth-only**. That keeps the
 subject's mobile learning objectives — Network Programming and File Parsing — in
-the app, and means the core feature (viewing molecules) works even if the backend
-is unreachable.
+the app itself rather than hidden behind an API.
 
 - **RN app** → fetches `.cif` directly from RCSB (`/ligands/view/{id}.cif`), parses
-  in-app (`frontend/src/lib/`), renders 3D, handles biometric login + foreground re-lock.
-- **Backend (Fastify)** → accounts only: register / login / me, JWT, Argon2id, Postgres.
-- See [`API.md`](API.md) for the contract, [`JURY.md`](JURY.md) to run it, and
-  [`fieldtrip.md`](fieldtrip.md) for how the architecture got here.
+  it in-app (`frontend/src/lib/cif.ts`), renders 3D with instanced meshes, handles
+  biometric login and the foreground re-lock.
+- **Backend (Fastify)** → accounts only: register / login / me, JWT with an expiry,
+  Argon2id at pinned cost parameters, rate-limited credential endpoints, Postgres.
+- Ligands you have already opened are **cached on the device** and open again with
+  no connection at all. Signing in still needs the backend — the subject requires
+  the login view on every launch, so there is no offline path past it.
 
-**Ownership:** Simon authors and defends the *shared core* (CIF parser, RCSB fetch,
-types, element data — they run in the app but are Simon's modules). Rodolfo authors
-the app UI, the 3D viewer, and the auth/biometric flow, and consumes the shared core
-through its typed API. Per `protein.md` Ch. III, each of us must still be able to
-explain any part at defense.
+See [`API.md`](API.md) for the contract, [`AI_USAGE.md`](AI_USAGE.md) for how AI was
+used (subject Ch. III), and [`fieldtrip.md`](fieldtrip.md) for how the architecture
+got here.
 
-## Team & responsibilities
+## Layout
 
-| Person | Role | Scope |
-|--------|------|-------|
-| **Rodolfo** | Frontend (app craft) | RN app: navigation, auth/biometric screens, foreground re-lock, ligand list + search, **3D molecule viewer**, sharing, UI polish — consumes the shared core below |
-| **Simon** | Backend + shared core | Auth API (JWT, Argon2id, Postgres), Docker/reproducibility, and the shared TS modules in `frontend/src/lib` (`cif`, `rcsb`) & `frontend/src/{data,types}` |
+```
+frontend/   the Expo app — screens, 3D viewer, CIF parser, element data, tests
+backend/    Fastify auth API — JWT, Argon2id, Postgres, tests
+scripts/    doctor / ensure-env / smoke, called by the Makefile
+```
 
-## Deadlines
+## Team & ownership
 
-- **Mon 24 August** — final checkpoint: everything reviewed and confirmed correct *before* submission.
-- **Mon 31 August** — project handed in + all **3 peer corrections** completed with our 42 peers.
+| Person | Scope |
+|--------|-------|
+| **Rodolfo** | RN app craft: navigation, auth/biometric screens, ligand list + search, the 3D molecule viewer, sharing, UI polish, the Android build path |
+| **Simon** | Auth API (JWT, Argon2id, Postgres), Docker/reproducibility, and the shared TS modules — `frontend/src/lib` (`cif`, `rcsb`, `moleculeGeometry`) and `frontend/src/{data,types}` |
 
-A **call every Monday** kicks off each week.
+Per `protein.md` Ch. III, each of us can explain any part of it at defense,
+whoever wrote it.
 
-## ⚠️ Planning constraint
+## Schedule
 
-Both of us are off during the weeks of **3 August** and **10 August**, so the app
-must be **feature-complete by Sunday 2 August** (end of the 27 July week).
-Weeks after that are reserved for solo polish, integration, and the final checkpoint.
+*Record of how the work was planned; kept for the defense conversation.*
 
-Off-weeks:
-- **Rodolfo off:** week of 13 Jul, 3 Aug, 10 Aug
-- **Simon off:** week of 27 Jul, 3 Aug, 10 Aug, 17 Aug
+Weekly Monday calls from **22 June**. The ligand pipeline was originally scoped as
+a backend API (weeks 3–5) and moved into the app instead — those endpoints were
+retired, and `backend/test/auth.test.js` asserts they now 404. The work itself
+still exists, as `frontend/src/lib/` and `frontend/src/data/`.
 
-## Week-by-week plan
-
-Each week begins with the Monday call.
-
-> **Historical.** Weeks 3–5 below assign Simon a ligand-data and atom-metadata API.
-> That was superseded: the ligand pipeline moved into the app (see Architecture
-> above), and those endpoints were retired — `backend/test/auth.test.js` now asserts
-> they 404. The work itself still happened, as `frontend/src/lib/` and
-> `frontend/src/data/`. Left as written for the record.
-
-### Week 1 — Mon 22 Jun  · _both_
-- **Call:** agree on stack, repo structure, API contract, scope.
-- **Rodolfo:** scaffold the RN app, set up navigation and screen skeletons.
-- **Simon:** scaffold the backend service, choose framework, set up DB + auth endpoint skeletons.
-
-### Week 2 — Mon 29 Jun  · _both_
-- **Rodolfo:** Login screen UI + biometric (Face/Touch ID) auth flow.
-- **Simon:** Auth API (register / login, tokens or sessions), user storage.
-
-### Week 3 — Mon 6 Jul  · _both_
-- **Rodolfo:** Ligand list screen with search; wire login screen to the backend.
-- **Simon:** Ligand data endpoint — fetch ligand files (RCSB), parse, cache, serve to the app.
-
-### Week 4 — Mon 13 Jul  · _Simon only (Rodolfo off)_
-- **Simon:** Harden the ligand API, caching layer, error handling, tests; document the API for Rodolfo.
-
-### Week 5 — Mon 20 Jul  · _both_
-- **Rodolfo:** 3D molecule rendering — atoms as spheres, bonds as sticks (the core feature).
-- **Simon:** Atom-metadata endpoint, finalize the API, deploy the backend to a host.
-
-### Week 6 — Mon 27 Jul  · _Rodolfo only (Simon off)_  🎯 feature-complete target
-- **Rodolfo:** Finish the 3D viewer — rotation, tap an atom for info, render modes, share a screenshot. Consume the deployed backend.
-- **Target:** app feature-complete by **Sun 2 Aug**.
-
-### Week 7 — Mon 3 Aug  · _both off_
-- No work (holidays).
-
-### Week 8 — Mon 10 Aug  · _both off_
-- No work (holidays).
-
-### Week 9 — Mon 17 Aug  · _Rodolfo only (Simon off)_
-- **Rodolfo:** Bug fixing, UI polish, edge cases, prepare the demo.
-
-### Week 10 — Mon 24 Aug  · _both_  ✅ FINAL CHECKPOINT
-- **Both:** full integration test, fix remaining bugs, verify every defense requirement, prep for peer evaluations. Confirm everything is correct before submission.
-
-### Week 11 — Mon 31 Aug  · _both_  🏁 DEADLINE
-- **Both:** submit the project and complete all **3 peer corrections** with our 42 peers.
+| Week | Focus |
+|---|---|
+| 22 Jun | Stack, repo structure, API contract, scope |
+| 29 Jun | Login screen + biometric flow; auth API and user storage |
+| 6–20 Jul | Ligand list and search; CIF pipeline; 3D rendering |
+| 27 Jul | 3D viewer complete — rotation, atom info, render modes, sharing |
+| 3–10 Aug | Both off |
+| 17 Aug | Bug fixing, polish, edge cases, demo prep |
+| **24 Aug** | **Final checkpoint** — full integration pass, every defense requirement verified |
+| **31 Aug** | **Hand-in** + all 3 peer corrections |

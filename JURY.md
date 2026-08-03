@@ -5,11 +5,21 @@ Two things to start: the **backend** (Docker) and the **app** (on a phone).
 ```bash
 make doctor   # checks this machine: Docker running? Node 20+?
 make up       # backend API + database, in containers. Verifies /health before returning.
-
-cd frontend
-npm ci
-npx expo start   # scan the QR code with Expo Go on the phone
 ```
+
+Then install the app. **Route 1 is the one to use** — it is the real app, with the
+real icon and the real launch screen:
+
+1. **Install the APK** (Android). Download it from this repository's
+   [Releases](../../releases) page, copy it to the phone, and open it. No Node, no
+   Metro, no QR code — and it keeps working if the laptop's Wi-Fi drops.
+2. **Or run it from source**, if you would rather see it build:
+   ```bash
+   cd frontend && npm ci && npx expo start   # scan the QR with Expo Go
+   ```
+   ⚠️ **Expo Go cannot show you the app icon or the native launch screen.** Those are
+   applied when the native project is generated, so under Expo Go you see *Expo's*
+   icon on the home screen and *Expo's* splash. Use route 1 to evaluate VI.1.
 
 The app uses the backend **only for login**. Molecule data is fetched live from the
 RCSB Protein Data Bank, so browsing ligands needs internet but does not depend on
@@ -21,11 +31,12 @@ the backend. Ligands you have already opened are cached and work offline.
 
 | Requirement | Why |
 |---|---|
+| **An Android phone** | The app is a phone app; it cannot run inside Docker. |
 | **Docker + Docker Compose v2** | Runs the backend API and its database. |
-| **Node 20+** | Runs `npx expo start`, which serves the app to the phone. |
-| **An Android phone with [Expo Go](https://expo.dev/go)** | The app is a phone app; it cannot run inside Docker. |
-| **Same network** | The phone loads the app from this machine and calls the backend on it. |
+| **Same network** | The phone calls the backend on this machine. |
 | **Internet access** | Molecule data comes from RCSB, live. |
+| **Node 20+** *(route 2 only)* | Runs `npx expo start`. Not needed if you install the APK. |
+| **[Expo Go](https://expo.dev/go)** *(route 2 only)* | Not needed if you install the APK. |
 
 `make doctor` checks these and prints install links for your OS.
 
@@ -46,11 +57,8 @@ the backend. Ligands you have already opened are cached and work offline.
    `make up` generates a random `JWT_SECRET` into `.env` on first run, then polls
    `/health` and fails loudly if the backend did not actually come up.
 
-3. **Run the app**
-   ```bash
-   cd frontend && npm ci && npx expo start
-   ```
-   Scan the QR with Expo Go.
+3. **Install the app** — the APK from [Releases](../../releases), or
+   `cd frontend && npm ci && npx expo start` and scan the QR with Expo Go.
 
 4. **Point the app at this machine.** In the app: **Settings → Backend URL**. Use
    this machine's LAN IP, e.g. `http://192.168.1.20:3000` — on a phone,
@@ -66,16 +74,33 @@ the backend. Ligands you have already opened are cached and work offline.
 
 ## What to try
 
+*Counts below were verified against `files.rcsb.org` on 4 Aug 2026.*
+
 | Ligand | Why it's interesting |
 |---|---|
 | `ATP` | 47 atoms, 49 bonds — the general case. |
-| `ZN` / `CU` | Single-atom ligands. Their mmCIF omits `loop_`, which the parser handles. |
+| `ZN` / `CU` | Single-atom ligands, no bonds. Their mmCIF omits `loop_`, which the parser handles; Wireframe and Stick say so rather than showing an empty box. |
 | `OXY` | Two atoms, one bond — the bond category is un-looped. |
-| `B12` | 180 atoms including cobalt — exercises the full CPK colour table. |
+| `B12` | 180 atoms and 190 bonds, including cobalt — exercises the full CPK colour table. |
 
-Also worth exercising: tap an atom (same-element atoms highlight), the four view
-modes, **Measure** (2 atoms = distance, 3 = angle), **Share**, rotating the device,
-and re-opening a viewed ligand in airplane mode.
+Also worth exercising:
+
+- **Tap an atom** — every atom of the same element lights up; tap elsewhere to dismiss.
+- **The four view modes**, switching with no re-fetch, and the **+ / - / recentre**
+  buttons at the top right of the canvas (pinch works too).
+- **Measure** — 2 atoms for a distance, 3 for an angle. **Labels** toggles element
+  symbols onto the atoms.
+- **Share** and **Save to Photos** (the download button) — then check the image in
+  the gallery. Coming back from the share sheet must leave you *on the molecule*,
+  not on the Login screen.
+- **Rotate the device** — the controls reflow and the molecule stays fully framed.
+- **Airplane mode** — a ligand you already opened still opens; a new one explains why
+  it cannot.
+- **Press Home and reopen the app** — the Login view is back, every time. That is the
+  subject's security requirement, and `frontend/src/auth/lockPolicy.ts` is the code
+  that decides it (with tests).
+- **The intro tour** — shown on first run; replay it from **Settings -> Show the intro
+  again**.
 
 ---
 
@@ -84,6 +109,7 @@ and re-opening a viewed ligand in airplane mode.
 ```
 make help      # list all targets
 make doctor    # check dependencies
+make test      # run both test suites (no Docker needed)
 make up        # start backend + database (detached), then verify /health
 make down      # stop everything
 make logs      # tail logs
@@ -92,26 +118,28 @@ make clean     # remove containers and volumes
 
 ---
 
-## Building a standalone APK (optional)
+## Building the APK yourself
 
-There is **no pre-built APK in this repo**, and no `make apk`. This is an Expo
-managed app: it has no `android/` directory, so an APK requires generating one
-first. Two supported routes, both needing network:
+The published APK is on the [Releases](../../releases) page — you should not need to
+build one. If you want to, this is an Expo managed app with no committed `android/`
+directory, so the native project is generated first. Two routes, both needing network:
 
 ```bash
 cd frontend
 
-# Local: generates android/, then builds a debug-signed APK
-npx expo prebuild --platform android
-cd android && ./gradlew assembleDebug
-# -> android/app/build/outputs/apk/debug/app-debug.apk
+# Local: generates android/, then Gradle. Needs an Android SDK, a JDK and ANDROID_HOME.
+npm run apk
+# -> android/app/build/outputs/apk/release/app-release.apk
 
-# Or hosted, no local Android toolchain (needs an Expo account):
+# Hosted: no local Android toolchain at all (needs an Expo account).
 npx eas build --platform android --profile preview
 ```
 
-Neither is needed to evaluate the project — `npx expo start` with Expo Go is the
-path we test and the one above.
+Both produce a **debug-signed** APK — Expo's Android template signs the `release`
+build type with the debug keystore, and there is no release keystore in this
+repository. It installs and runs; it is simply not store-signed, which nothing here
+needs. Build outputs are not committed: the subject asks for the Git repository
+(Ch. VIII), so the binary is a Release asset rather than a blob in the tree.
 
 ---
 

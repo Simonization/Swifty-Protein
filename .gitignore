@@ -25,10 +25,11 @@ DerivedData/
 android/
 *.keystore
 !debug.keystore
+# Build outputs are never committed. The subject asks only for the Git
+# repository (Ch. VIII); the installable APK is published as a GitHub Release
+# asset instead, so the repo stays a source tree.
 *.apk
 *.aab
-# ...except the delivered release build, which the subject expects in the repo.
-!dist/app-release.apk
 
 # ===== Env / secrets =====
 .env
@@ -45,7 +46,7 @@ android/
 .DS_Store
 Thumbs.db
 
-# ===== Python (scripts/gen-icons.py) =====
+# ===== Python (frontend/scripts/gen-icons.py) =====
 __pycache__/
 *.pyc
 
