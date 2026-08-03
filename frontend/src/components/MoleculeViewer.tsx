@@ -9,10 +9,15 @@ import { ErrorBanner } from './ErrorBanner';
 import { colors, spacing, typography } from '../theme/theme';
 import { elementFor } from '../data/elements';
 import {
+  FOV_DEG,
   MAX_ATOMS,
   MAX_BONDS,
+  atomScaleFor,
+  bondRadiusFor,
+  boundingRadiusFor,
   buildHalfBonds,
   exceedsRenderLimits,
+  frameDistance,
   groupAtomIndicesByElement,
   groupHalfBondIndicesByColor,
   layoutAtoms,
@@ -65,6 +70,12 @@ export type Selection =
 
 export interface MoleculeViewerHandle {
   captureSnapshot: () => Promise<string | null>;
+  // On-screen zoom, for the same reason the reference implementations ship it:
+  // a pinch is awkward on an emulator and on a phone held one-handed, and the
+  // evaluator performs "zoom in/out" by hand.
+  zoomBy: (factor: number) => void;
+  // Back to the framing the molecule was first shown at.
+  resetView: () => void;
 }
 
 interface MoleculeViewerProps {
@@ -124,23 +135,10 @@ interface BondGroup {
   mesh: THREE.InstancedMesh;
 }
 
-// Per-mode atom/bond visuals — VII.1: switching modes never touches the
-// underlying geometry, only scale/visibility, so it's instant either way.
-// Wireframe draws no atom spheres at all, so it has no atom scale.
-function atomScaleFor(mode: Exclude<ViewMode, 'wireframe'>, elementRadius: number): number {
-  switch (mode) {
-    case 'ballStick':
-      return elementRadius * 0.28;
-    case 'spaceFilling':
-      return elementRadius;
-    case 'stick':
-      return 0.14;
-  }
-}
-
-function bondRadiusFor(mode: ViewMode): number {
-  return mode === 'stick' ? 0.11 : 0.09;
-}
+// atomScaleFor / bondRadiusFor / frameDistance / boundingRadiusFor live in
+// lib/moleculeGeometry, with the rest of the framework-free math, so they can
+// be unit-tested without a GL context. See FOV_DEG there: it must stay in step
+// with the PerspectiveCamera constructed below.
 
 export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerProps>(
   function MoleculeViewer({ ligand, mode, showLabels, measureMode, onSelectionChange, onTooLarge }, ref) {
@@ -162,6 +160,10 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       null
     );
     const baseDistance = useRef(10);
+    // Inputs to frameDistance, kept so a mode switch or a rotation can re-frame
+    // without re-deriving the layout.
+    const maxCenterDistance = useRef(1);
+    const maxAtomRadius = useRef(1);
 
     // Refusing a ligand outright is cheaper than every guard downstream having
     // to cope with a half-built scene, so this is decided before anything GL
@@ -284,6 +286,9 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
 
       if (wireframeRef.current) wireframeRef.current.visible = nextMode === 'wireframe';
       syncMeasureSlots(nextMode);
+      // Space-filling is drawn much larger than ball & stick; without this the
+      // molecule grows past the framing chosen for the previous mode.
+      frameCamera(nextMode);
     };
 
     useEffect(() => {
@@ -322,6 +327,21 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
           });
           return typeof snapshot?.uri === 'string' ? snapshot.uri : null;
         },
+        zoomBy: (factor: number) => {
+          zoom.current = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom.current * factor));
+          // Keep the pinch baseline in step, or the next pinch would snap back
+          // to whatever the last pinch left behind.
+          savedZoom.current = zoom.current;
+          applyCamera();
+        },
+        resetView: () => {
+          zoom.current = 1;
+          savedZoom.current = 1;
+          pan.current = { x: 0, y: 0 };
+          panAnimation.current = null;
+          rotation.current = { x: -0.35, y: 0.5 };
+          frameCamera(modeRef.current);
+        },
       }),
       [],
     );
@@ -338,6 +358,16 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       if (!camera) return;
       camera.position.set(pan.current.x, pan.current.y, baseDistance.current / zoom.current);
       camera.lookAt(pan.current.x, pan.current.y, 0);
+    };
+
+    // Recomputes the framing distance for `nextMode` and the current viewport.
+    // Called on first build, on every mode switch, and on rotation (the aspect
+    // ratio inverts, and portrait framing leaves a landscape molecule clipped).
+    const frameCamera = (nextMode: ViewMode) => {
+      const { width, height } = sizeRef.current;
+      const radius = boundingRadiusFor(nextMode, maxCenterDistance.current, maxAtomRadius.current);
+      baseDistance.current = frameDistance(radius, width / height);
+      applyCamera();
     };
 
     const updatePanAnimation = () => {
@@ -522,7 +552,10 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
         .onUpdate((e) => {
           zoom.current = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, savedZoom.current * e.scale));
         })
-        .onEnd(() => {
+        // onFinalize, not onEnd: onEnd doesn't run when the gesture is cancelled
+        // or interrupted, which left savedZoom stale and made the *next* pinch
+        // jump back to the zoom level before the cancelled one.
+        .onFinalize(() => {
           savedZoom.current = zoom.current;
         });
 
@@ -540,7 +573,13 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
           if (success) handleSingleTap(e.x, e.y);
         });
 
-      return Gesture.Simultaneous(panOneFinger, panTwoFinger, pinch, doubleTap, singleTap);
+      // Race, not Simultaneous, for the two-finger pair: both `panTwoFinger` and
+      // `pinch` activate on exactly two pointers, so under Simultaneous every
+      // pinch also dragged the camera by whatever the fingers' midpoint drifted.
+      // Racing them means two fingers do one thing at a time — whichever the
+      // user's motion looks like first.
+      const twoFinger = Gesture.Race(pinch, panTwoFinger);
+      return Gesture.Simultaneous(panOneFinger, twoFinger, doubleTap, singleTap);
     }, []);
 
     const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
@@ -563,7 +602,7 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       rendererRef.current = renderer;
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      const camera = new THREE.PerspectiveCamera(FOV_DEG, width / height, 0.1, 1000);
       cameraRef.current = camera;
 
       scene.add(new THREE.AmbientLight(0xffffff, 0.55));
@@ -581,8 +620,12 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       // All of the layout maths lives in lib/moleculeGeometry so it can be
       // unit-tested without a GL context; everything below is scene assembly.
       const { positions, maxDistance } = layoutAtoms(ligand.atoms);
-      baseDistance.current = Math.max(maxDistance * 2.6, 4);
-      applyCamera();
+      maxCenterDistance.current = maxDistance;
+      maxAtomRadius.current = ligand.atoms.reduce(
+        (max, atom) => Math.max(max, elementFor(atom.element).radius),
+        0,
+      );
+      frameCamera(modeRef.current);
 
       const atomPositions = positions.map(([x, y, z]) => new THREE.Vector3(x, y, z));
       atomPositionsRef.current = atomPositions;
@@ -795,6 +838,7 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
     const onLayout = (e: LayoutChangeEvent) => {
       const { width, height } = e.nativeEvent.layout;
       if (width <= 0 || height <= 0) return;
+      const changed = width !== sizeRef.current.width || height !== sizeRef.current.height;
       sizeRef.current = { width, height };
       const camera = cameraRef.current;
       const renderer = rendererRef.current;
@@ -802,6 +846,10 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);
+        // Rotating the device inverts the aspect ratio, so the framing chosen
+        // for portrait clips the molecule in landscape (and wastes space the
+        // other way round). Re-frame, but keep the user's zoom and pan.
+        if (changed) frameCamera(modeRef.current);
       }
     };
 

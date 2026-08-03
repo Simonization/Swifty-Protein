@@ -6,6 +6,9 @@
 // it stays plain-number-tuple math that jest can exercise directly.
 import { elementFor } from '../data/elements';
 import type { Atom, Bond } from '../types';
+// Type-only, so nothing pulls the component (and with it expo-three/expo-gl)
+// into this module or into a test that imports it.
+import type { ViewMode } from '../components/MoleculeViewer';
 
 export type Vec3 = readonly [number, number, number];
 
@@ -33,6 +36,64 @@ export function lodFor(atomCount: number): LodProfile {
 
 export function exceedsRenderLimits(atomCount: number, bondCount: number): boolean {
   return atomCount > MAX_ATOMS || bondCount > MAX_BONDS;
+}
+
+// --- Per-mode visuals and camera framing (VII.1 + mandatory VI.4) ---
+
+// Switching modes never touches the underlying geometry, only scale and
+// visibility, so it is instant either way. Wireframe draws no atom spheres at
+// all, so it has no atom scale.
+export function atomScaleFor(mode: Exclude<ViewMode, 'wireframe'>, elementRadius: number): number {
+  switch (mode) {
+    case 'ballStick':
+      return elementRadius * 0.28;
+    case 'spaceFilling':
+      return elementRadius;
+    case 'stick':
+      return 0.14;
+  }
+}
+
+export function bondRadiusFor(mode: ViewMode): number {
+  return mode === 'stick' ? 0.11 : 0.09;
+}
+
+// Must match the PerspectiveCamera in MoleculeViewer.
+export const FOV_DEG = 45;
+// The camera distance that fits a sphere of radius R vertically is
+// R / TAN_HALF_FOV.
+const TAN_HALF_FOV = Math.tan((FOV_DEG / 2) * (Math.PI / 180));
+// A little air around the molecule so it doesn't touch the viewport edges.
+const FRAME_MARGIN = 1.12;
+// Never closer than this, however small the molecule — a single-atom ion would
+// otherwise put the camera inside the near plane.
+const MIN_DISTANCE = 4;
+
+// The camera distance that shows the *whole* molecule in the current viewport.
+//
+// The previous formula (maxDistance * 2.6) fits the molecule vertically only.
+// The viewer pane is much taller than it is wide — roughly 0.63 aspect on a
+// phone in portrait — so the horizontal half-extent was about 0.68x the radius
+// it needed, and the outer atoms of a wide ligand were clipped on first render.
+// Dividing by min(1, aspect) makes the *narrower* axis the one that has to fit,
+// which is the requirement: "initial camera position should show the entire
+// molecule".
+export function frameDistance(radius: number, aspect: number): number {
+  const fitting = Number.isFinite(aspect) && aspect > 0 ? Math.min(1, aspect) : 1;
+  return Math.max((radius * FRAME_MARGIN) / (TAN_HALF_FOV * fitting), MIN_DISTANCE);
+}
+
+// The molecule's bounding radius *as drawn in this mode*. Space-filling paints
+// every atom at its full van der Waals radius, which sticks out well past the
+// atom-centre extent `maxDistance` measures — so the framing has to grow when
+// the mode does, and that is why switching modes re-frames.
+export function boundingRadiusFor(
+  mode: ViewMode,
+  maxCenterDistance: number,
+  maxAtomRadius: number,
+): number {
+  if (mode === 'wireframe') return maxCenterDistance;
+  return maxCenterDistance + atomScaleFor(mode, maxAtomRadius);
 }
 
 export function centerOf(atoms: Atom[]): Vec3 {
