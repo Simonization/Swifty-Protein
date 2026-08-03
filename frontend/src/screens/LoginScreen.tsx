@@ -33,14 +33,24 @@ export function LoginScreen({ navigation }: Props) {
     setShowPasswordFallback(!biometrics.available);
   }, [status, biometrics.available]);
 
+  // Shared by the auto-prompt below and the "Unlock" button. `unlockWithBiometrics`
+  // resolves rather than rejects on a failed scan, but a rejection here would be an
+  // unhandled promise on the one screen the subject requires to always work.
+  const promptBiometrics = async () => {
+    try {
+      const result = await unlockWithBiometrics();
+      if (!result.success && result.message) {
+        Alert.alert('Authentication failed', result.message);
+      }
+    } catch {
+      Alert.alert('Authentication failed', 'Authentication failed. Please try again.');
+    }
+  };
+
   // In the locked (re-auth) state, offer the device's biometric prompt immediately.
   useEffect(() => {
     if (locked && biometrics.available && !showPasswordFallback) {
-      unlockWithBiometrics().then((result) => {
-        if (!result.success && result.message) {
-          Alert.alert('Authentication failed', result.message);
-        }
-      });
+      void promptBiometrics();
     }
     // Only run once when this screen mounts into the locked state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -68,11 +78,10 @@ export function LoginScreen({ navigation }: Props) {
     }
   };
 
-  const retryBiometrics = async () => {
-    const result = await unlockWithBiometrics();
-    if (!result.success && result.message) {
-      Alert.alert('Authentication failed', result.message);
-    }
+  // clearSession() swallows its own storage errors, so this cannot reject; `void`
+  // documents that the button deliberately does not await it.
+  const handleLogout = () => {
+    void logout();
   };
 
   if (locked && !showPasswordFallback) {
@@ -82,11 +91,11 @@ export function LoginScreen({ navigation }: Props) {
         <Text style={styles.welcomeBack}>Welcome back, {user?.username}</Text>
         <Text style={styles.subtitle}>Unlock with {biometrics.label} to continue.</Text>
         <View style={styles.gap} />
-        <Button label={`Unlock with ${biometrics.label}`} onPress={retryBiometrics} />
+        <Button label={`Unlock with ${biometrics.label}`} onPress={() => void promptBiometrics()} />
         <View style={styles.smallGap} />
         <Button label="Use password instead" variant="ghost" onPress={() => setShowPasswordFallback(true)} />
         <View style={styles.smallGap} />
-        <Button label="Log out" variant="ghost" onPress={() => logout()} />
+        <Button label="Log out" variant="ghost" onPress={handleLogout} />
       </Screen>
     );
   }
@@ -123,7 +132,7 @@ export function LoginScreen({ navigation }: Props) {
       )}
       <View style={styles.smallGap} />
       {locked ? (
-        <Button label="Log out" variant="ghost" onPress={() => logout()} />
+        <Button label="Log out" variant="ghost" onPress={handleLogout} />
       ) : (
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>New here? </Text>

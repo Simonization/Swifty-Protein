@@ -13,6 +13,7 @@ import { ApiError } from '../api/client';
 import type { User } from '../api/auth';
 import { checkBiometricSupport, authenticateWithBiometrics, type BiometricCheck } from './biometrics';
 import { clearSession, loadSession, saveSession } from './storage';
+import { shouldRelock } from './lockPolicy';
 
 type Status = 'bootstrapping' | 'signedOut' | 'locked' | 'unlocked';
 
@@ -28,6 +29,9 @@ interface AuthContextValue extends AuthState {
   loginWithPassword: (username: string, password: string) => Promise<void>;
   unlockWithBiometrics: () => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
+  // Runs `fn` without letting the resulting background event re-lock the app.
+  // For foreground handoffs the app initiates itself — currently the share sheet.
+  runWithoutRelock: <T>(fn: () => Promise<T>) => Promise<T>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -42,10 +46,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Tracks whether the *current* session gate has ever been passed, so the
   // AppState listener knows whether backgrounding should re-lock.
   const wasUnlocked = useRef(false);
+  // Set while the app itself has deliberately handed control to another activity
+  // (the share chooser, the biometric prompt). See the AppState listener below.
+  const excursion = useRef(false);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const [session, biometrics] = await Promise.all([loadSession(), checkBiometricSupport()]);
+      // Neither of these rejects any more (see auth/storage and auth/biometrics),
+      // but the guard stays: if bootstrap ever throws, `status` never leaves
+      // 'bootstrapping' and RootNavigator holds the splash screen forever.
+      let session: Awaited<ReturnType<typeof loadSession>> = null;
+      let biometrics: BiometricCheck = { available: false, label: 'Biometrics' };
+      try {
+        [session, biometrics] = await Promise.all([loadSession(), checkBiometricSupport()]);
+      } catch {
+        // Fall through to signedOut with biometrics unavailable — the password
+        // path is always reachable, so the app is usable rather than stuck.
+      }
+      if (cancelled) return;
       setState((s) => ({
         ...s,
         status: session ? 'locked' : 'signedOut',
@@ -54,20 +73,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         biometrics,
       }));
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     const onChange = (next: AppStateStatus) => {
-      // 'background' only, never 'inactive': iOS fires 'inactive' for the share
-      // sheet, Control Center, and notification banners, none of which should
-      // kick the user back to Login mid-action.
-      if (next === 'background' && wasUnlocked.current) {
+      // The decision itself is in auth/lockPolicy, where it is unit-tested —
+      // this is the requirement the evaluation sheet checks by pressing Home
+      // and reopening the app.
+      if (shouldRelock({ next, wasUnlocked: wasUnlocked.current, excursion: excursion.current })) {
         wasUnlocked.current = false;
         setState((s) => (s.status === 'unlocked' ? { ...s, status: 'locked' } : s));
       }
+      // Clear on the way back, not on the way out: 'background' can arrive after
+      // the excursion has already been marked finished on a slow device.
+      if (next === 'active') excursion.current = false;
     };
     const sub = AppState.addEventListener('change', onChange);
     return () => sub.remove();
+  }, []);
+
+  // Wraps a call that hands the foreground to another activity we launched
+  // ourselves, so returning from it does not read as the user leaving the app.
+  const runWithoutRelock = useCallback(async <T,>(fn: () => Promise<T>): Promise<T> => {
+    excursion.current = true;
+    try {
+      return await fn();
+    } finally {
+      // A late 'active' event clears this too; this is the fast path for the
+      // case where the OS never actually backgrounded us.
+      setTimeout(() => {
+        excursion.current = false;
+      }, 1000);
+    }
   }, []);
 
   const unlock = useCallback((user: User, token: string) => {
@@ -96,12 +136,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Re-gates access to the already-stored session without hitting the network.
   const unlockWithBiometrics = useCallback(async () => {
     const label = state.biometrics.label;
-    const result = await authenticateWithBiometrics(`Unlock Swifty Protein with ${label}`);
+    // Some Android face-unlock implementations run in their own activity.
+    const result = await runWithoutRelock(() =>
+      authenticateWithBiometrics(`Unlock Swifty Protein with ${label}`),
+    );
     if (result.success && state.user && state.token) {
       unlock(state.user, state.token);
     }
     return result;
-  }, [state.biometrics.label, state.user, state.token, unlock]);
+  }, [state.biometrics.label, state.user, state.token, unlock, runWithoutRelock]);
 
   const logout = useCallback(async () => {
     await clearSession();
@@ -110,8 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ ...state, register, loginWithPassword, unlockWithBiometrics, logout }),
-    [state, register, loginWithPassword, unlockWithBiometrics, logout],
+    () => ({ ...state, register, loginWithPassword, unlockWithBiometrics, logout, runWithoutRelock }),
+    [state, register, loginWithPassword, unlockWithBiometrics, logout, runWithoutRelock],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

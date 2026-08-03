@@ -3,7 +3,16 @@
 // The persisted API URL has to reach the client before anything can call the
 // backend, so this provider applies it on load and on every save, and reports
 // `ready` so the app can hold the splash until it has.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import { setApiBaseUrl } from '../api/client';
 import { DEFAULT_SETTINGS, readSettings, writeSettings, type Settings } from './settings';
@@ -11,7 +20,10 @@ import { DEFAULT_SETTINGS, readSettings, writeSettings, type Settings } from './
 interface SettingsContextValue {
   settings: Settings;
   ready: boolean;
-  save: (next: Settings) => Promise<void>;
+  // Partial, and merged over the current value: the Settings screen only knows
+  // about the fields it renders, and must not clear the ones it doesn't
+  // (onboardingSeen).
+  save: (next: Partial<Settings>) => Promise<void>;
   reset: () => Promise<void>;
 }
 
@@ -23,17 +35,31 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const loaded = await readSettings();
-      setApiBaseUrl(loaded.apiBaseUrl);
-      setSettings(loaded);
+      try {
+        const loaded = await readSettings();
+        setApiBaseUrl(loaded.apiBaseUrl);
+        setSettings(loaded);
+      } catch {
+        // Defaults are already in state. The one thing that must happen either
+        // way is `ready`: RootNavigator holds the splash screen until it flips,
+        // so an escape here would strand the app on the splash forever.
+      }
       setReady(true);
     })();
   }, []);
 
-  const save = useCallback(async (next: Settings) => {
-    setApiBaseUrl(next.apiBaseUrl);
-    setSettings(next);
-    await writeSettings(next);
+  // Mirrors `settings` so `save` can merge against the current value without
+  // taking it as a dependency — the callback stays stable, and a save issued
+  // from a stale render still writes the whole, current object.
+  const latest = useRef(settings);
+  latest.current = settings;
+
+  const save = useCallback(async (patch: Partial<Settings>) => {
+    const merged = { ...latest.current, ...patch };
+    latest.current = merged;
+    setApiBaseUrl(merged.apiBaseUrl);
+    setSettings(merged);
+    await writeSettings(merged);
   }, []);
 
   const reset = useCallback(() => save(DEFAULT_SETTINGS), [save]);

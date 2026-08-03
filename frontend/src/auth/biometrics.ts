@@ -8,19 +8,29 @@ export interface BiometricCheck {
   label: string; // "Face ID" / "Touch ID" / "Biometrics", for button copy
 }
 
+const UNAVAILABLE: BiometricCheck = { available: false, label: 'Biometrics' };
+
+// Never throws. This runs during cold-start bootstrap, and the module raises
+// UnavailabilityError on targets with no biometric hardware module at all — an
+// escape here would leave the app stranded on the splash screen forever.
 export async function checkBiometricSupport(): Promise<BiometricCheck> {
-  const hasHardware = await LocalAuthentication.hasHardwareAsync();
-  const isEnrolled = hasHardware && (await LocalAuthentication.isEnrolledAsync());
-  if (!hasHardware || !isEnrolled) return { available: false, label: 'Biometrics' };
+  try {
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const isEnrolled = hasHardware && (await LocalAuthentication.isEnrolledAsync());
+    if (!hasHardware || !isEnrolled) return UNAVAILABLE;
 
-  const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-  const label = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)
-    ? 'Face ID'
-    : types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)
-      ? 'Touch ID'
-      : 'Biometrics';
+    const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+    const label = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)
+      ? 'Face ID'
+      : types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)
+        ? 'Touch ID'
+        : 'Biometrics';
 
-  return { available: true, label };
+    return { available: true, label };
+  } catch {
+    // Treated as "no biometrics": the password fallback is always reachable.
+    return UNAVAILABLE;
+  }
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -39,14 +49,21 @@ export interface BiometricResult {
   message?: string; // set when !success — user-facing, per protein.md's popup requirement
 }
 
+// Also never throws: authenticateAsync rejects when there is no foreground
+// activity to host the prompt (Android), and every call site renders the message
+// in the alert the subject requires rather than handling an exception.
 export async function authenticateWithBiometrics(promptMessage: string): Promise<BiometricResult> {
-  const result = await LocalAuthentication.authenticateAsync({
-    promptMessage,
-    cancelLabel: 'Use password',
-    disableDeviceFallback: true, // stay in our own UI on failure, don't fall to OS PIN
-  });
+  try {
+    const result = await LocalAuthentication.authenticateAsync({
+      promptMessage,
+      cancelLabel: 'Use password',
+      disableDeviceFallback: true, // stay in our own UI on failure, don't fall to OS PIN
+    });
 
-  if (result.success) return { success: true };
-  const message = ERROR_MESSAGES[result.error ?? ''] ?? 'Authentication failed. Please try again.';
-  return { success: false, message };
+    if (result.success) return { success: true };
+    const message = ERROR_MESSAGES[result.error ?? ''] ?? 'Authentication failed. Please try again.';
+    return { success: false, message };
+  } catch {
+    return { success: false, message: ERROR_MESSAGES.not_available };
+  }
 }
