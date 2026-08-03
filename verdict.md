@@ -2,14 +2,17 @@
 
 Original audit: 2026-07-25 (rperez-t), against `main` at `71b8790`.
 Revised: 2026-07-29, after `simon-review` was merged at `aa76f32`.
+Re-revised: 2026-08-03 (Simon), after `fa98272` (parser/fetch input guards)
+and `918f98c` (instanced molecule viewer).
 Scope: the repository as committed, assessed against the supplied Swifty Protein v6.0 subject.
 
-> **Why this file changed.** The original audit was accurate about the tree it could
-> see. It could not see `simon-review` — 23 commits that had been sitting unmerged on
-> a branch since 2026-07-16, and which close nine of its findings outright. The
-> verdict below is the same document, re-graded against the merged tree, with every
-> row that changed pointing at the commit that changed it. Findings that survived the
-> merge are kept, unsoftened.
+> **Why this file changed, twice now.** The first revision closed nine findings the
+> original audit couldn't see because `simon-review` was still unmerged. This second
+> pass closes two more that were explicitly logged as open in that revision — the
+> parser/fetch input guards and the instanced-rendering rewrite, both called out by
+> name in the "Remaining work" list below. Same convention as last time: every row
+> that changed points at the commit that changed it, findings that survived are kept
+> unsoftened, and nothing here is claimed as device-verified unless it was.
 
 ## Final verdict
 
@@ -42,9 +45,9 @@ Two of the three original blockers are gone:
 |---|---|---|
 | Mobile platform and modern stack | **Partial** | React Native/Expo is an authorized multiplatform choice. `expo@57.0.2`, React Native 0.86 and React 19.2.3 match the Expo SDK 57 compatibility table. The incompatible build image (Node 20, Android SDK 34) that this row originally flagged no longer exists; whatever replaces it must target Node 22.13+ and compile/target SDK 36. |
 | RCSB `.cif` retrieval | **Present** | `frontend/src/lib/rcsb.ts` uses the required `https://files.rcsb.org/ligands/view/{ligand}.cif` endpoint. |
-| Own CIF parser | **Present** | `frontend/src/lib/cif.ts` parses `_chem_comp_atom` and `_chem_comp_bond`, metadata, coordinates, orders and aromatic flags. It now also reads **single-row categories**, which mmCIF writes without `loop_` (`c0bf98b`) — the original audit did not catch that this was broken, and it took out 23 of 24 single-atom ion ligands. Still a pragmatic subset: it does not validate non-finite coordinates, and does not support every CIF multiline construct. |
+| Own CIF parser | **Present** | `frontend/src/lib/cif.ts` parses `_chem_comp_atom` and `_chem_comp_bond`, metadata, coordinates, orders and aromatic flags. It now also reads **single-row categories**, which mmCIF writes without `loop_` (`c0bf98b`) — the original audit did not catch that this was broken, and it took out 23 of 24 single-atom ion ligands. A non-finite coordinate token (`NaN`/`Infinity`) now falls back to 0 rather than reaching `THREE.Vector3` unvalidated (`fa98272`). Still a pragmatic subset: it does not support every CIF multiline construct. |
 | Responsive UI | **Present in source** | Flex layouts, `SafeAreaView`, `FlatList`, scrolling login/register views, unrestricted orientation, tablet support. Runtime behavior still not verified. |
-| Asynchronous network and responsive UI | **Partial** | `fetch`, `AbortController` and loading UI. CIF parsing is still synchronous on the JS thread, with no worker and **no size guard** — `fetchLigandCif` has an 8s timeout but no response-size or atom-count limit. Unchanged. |
+| Asynchronous network and responsive UI | **Partial** | `fetch`, `AbortController` and loading UI. `fetchLigandCif` now rejects responses over 5MB as a new `too_large` error kind (`fa98272`), and the renderer refuses ligands over 2000 atoms / 4000 bonds instead of attempting them (`918f98c`) — both graceful, user-facing failures rather than silent hangs. CIF parsing itself is still synchronous on the JS thread with no worker and no progress indication. |
 | Graceful errors | **Present** | Ligand 404, timeout, offline and empty-parse cases all have user-facing alerts. Non-JSON response bodies are now classified as `ApiError` rather than escaping as a raw `SyntaxError` (`cce954a`). Large-file/memory handling is still absent. |
 | Secure account storage | **Present** | Argon2id in `backend/src/lib/password.js`; JWT/user state in `expo-secure-store`; passwords never stored by the app. Tokens now carry an expiry (`5db5b2c`) — `app.js:21` signs with `expiresIn: config.jwtTtl`, default `7d` — and `/me` returns 401, not `200 {"user": null}`, when a valid token outlives its user. The documented device API is still plain HTTP. |
 | Accessibility | **Present** | Was **Weak/partial**: the frontend had no `accessibilityLabel` or `accessibilityRole` anywhere. Every control now carries one, labelled centrally in `Button`, `TextField` and `SearchBar`. Stateful toggles report `accessibilityState.selected`; the selection tooltip, error banner and loading overlay are live regions; the GL surface describes the molecule and its gestures. Not yet verified with TalkBack/VoiceOver on hardware. |
@@ -109,13 +112,15 @@ Two things improved since:
   `client`, `ligands`), with `CU.cif` / `OXY.cif` / `ATP.cif` fixtures covering the
   single-row parse cases and the ATP 47-atom/49-bond regression.
 
-Remaining concerns, all unchanged: parsing is synchronous on the JS thread, there is
-no response-size or atom-count limit, and no run on real hardware.
+Remaining concerns: parsing is still synchronous on the JS thread with no progress
+indication, and there is still no run on real hardware. The response-size and
+atom-count limits that were missing here are fixed (`fa98272`, `918f98c` — see VII.4).
 
 > Note on the original audit's method: it reported "attempted the frontend test suite,
 > but this host's Snap-installed Node/npm refuses to execute." The suite does run —
-> `npm ci && npx jest` passes 21/21, and `npx tsc --noEmit` is clean. That was an
-> environment problem, not a repository problem, and it is worth separating the two.
+> `npm ci && npx jest` passes (37/37 as of `918f98c`, up from 21/21 at the last
+> revision), and `npx tsc --noEmit` is clean. That was an environment problem, not a
+> repository problem, and it is worth separating the two.
 
 ### VI.4 Protein View — **SUBSTANTIAL IMPLEMENTATION; STILL NOT PROVEN FLAWLESS**
 
@@ -135,13 +140,39 @@ are now resolved:
 - ~~Snapshot declares PNG but Expo GL defaults to JPEG.~~ Fixed (`89f35b9`):
   `takeSnapshotAsync` now passes `format: 'png'`.
 
+**Was** the largest piece of unaddressed technical risk in the repository: every atom
+and half-bond was its own `THREE.Mesh` with a cloned material, so draw calls and CPU
+overhead scaled linearly with molecule size — no instancing, no LOD, no molecule-size
+cap, no FPS measurement.
+
+`918f98c` rewrites the renderer around one `THREE.InstancedMesh` per distinct element
+(atoms) and per distinct CPK colour (bond halves) instead — grouping this way, rather
+than one mesh with a per-instance colour attribute, means each group needs only one
+plain material, so same-element highlighting stays a single material tweak instead of
+a shader. Picking now resolves `raycaster`'s `instanceId` back to atom/bond data
+through a flat index array built alongside the instances; measurement highlighting
+(per-atom, not per-element) uses a pool of 3 overlay spheres instead, since
+`InstancedMesh` has no per-instance emissive without a shader. Geometry now steps down
+through 3 LOD tiers by atom count (unchanged at the sizes this app actually ships —
+B12's 180 atoms renders at the original fixed segment counts), and ligands over 2000
+atoms / 4000 bonds are refused with a user-facing alert rather than attempted. A
+`__DEV__`-only overlay reports FPS and draw-call count, which is the number that will
+actually show whether this helped (roughly one draw call per element/bond-colour
+group instead of one per atom/bond — for a typical ligand, low double digits instead
+of several hundred).
+
+The index-mapping and per-bond geometry math that make the above correct live in the
+new `frontend/src/lib/moleculeGeometry.ts`, framework-free so they're unit-tested
+directly (12 tests) rather than only arguable by reading the code.
+
 **Still open, and the honest gap in this section:**
 
-- No release/device proof of the GL renderer, hit testing, gestures or sharing.
-- Every atom and half-bond is still an individual mesh. There is **no instancing, no
-  LOD, no adaptive quality, no molecule-size cap and no FPS measurement**, so smooth
-  behaviour on complex ligands and the 60 FPS target remain unestablished. This is
-  the largest piece of unaddressed technical risk in the repository.
+- No release/device proof of the GL renderer, hit testing, gestures or sharing —
+  unchanged, and now the *only* gap in this section. Nobody in the loop that wrote
+  `918f98c` had access to a device or a GPU; every claim above is reasoned from source
+  and the three.js/expo-three/expo-gl versions in `package.json`, not observed on
+  screen. The draw-call overlay exists specifically so the first device session can
+  confirm instancing actually took effect rather than assuming it from the diff.
 - Label projection was made cheaper (`dc426cd` stopped the RAF loop rebuilding the
   gesture tree on every label update), but it still projects every atom.
 
@@ -184,10 +215,15 @@ screen together.
 (`9ea9311`). `rcsb.ts` no longer says "to be added", and `JURY.md`'s offline claim is
 now true. The demo is airplane mode → a previously viewed ligand still opens.
 
-**Performance is still not addressed**, and the original audit's list stands in full:
-no background parser, no parsing progress, no LOD, no mesh instancing, no
-large-molecule strategy, no FPS instrumentation. Grading this section as anything
-better than partial would be dishonest.
+**Performance has moved, but is still not proven.** `918f98c` adds LOD, mesh
+instancing, a molecule-size cap and FPS/draw-call instrumentation — four of the
+original audit's six gaps here, and the same commit as the VI.4 rewrite above (they're
+one change). What's still genuinely absent: no background parser and no parsing
+progress indication (CIF parsing is still synchronous on the JS thread). And the
+instancing win is, again, unverified on a device or a real GPU. Grading this as
+anything better than partial would still be dishonest — the difference from the last
+revision is *why* it's partial: not "nothing was attempted," but "attempted, argued
+correct from source, not yet observed."
 
 ### VII.5 Extended Sharing and Export — **PARTIAL** (was NOT IMPLEMENTED)
 
@@ -198,7 +234,7 @@ better than partial would be dishonest.
   user-selectable.
 - Still absent: 3D export, video recording, side-by-side comparison.
 
-## Validation performed (this revision)
+## Validation performed (2026-07-29 revision)
 
 - Merged `origin/simon-review` into `main`; resolved 7 conflicts, all in the icon set.
 - `npm ci`, then `npx tsc --noEmit` → clean, and `npx jest` → **21 passed, 3 suites**.
@@ -214,18 +250,37 @@ better than partial would be dishonest.
   hardware. Code-presence findings are reliable; runtime behaviour is still
   explicitly not certified.
 
+## Validation performed (2026-08-03 revision)
+
+- `npm ci`, then `npx tsc --noEmit` → clean, and `npx jest` → **37 passed, 5 suites**
+  (up from 21/3 — two new suites, `rcsb.test.ts` and `moleculeGeometry.test.ts`, plus
+  new cases in `cif.test.ts`).
+- Read the full `MoleculeViewer.tsx` diff by hand against three specific failure
+  modes: stale `InstancedMesh` bounding spheres after a mode-switch matrix rewrite,
+  atom-group-clone vs. bond-group-shared material identity (a highlight-bleed bug no
+  test can catch), and `instanceId → atom/bond index` mapping correctness. Traced the
+  wireframe segment math and the half-bond offset math against the pre-rewrite
+  formulas by hand rather than trusting the diff on sight.
+- **Not done, same as last time and for the same reason:** no Docker build or run, no
+  release build, nothing on real hardware or a real GPU. This revision is entirely a
+  source-level review — see the VI.4/VII.4 sections above for what that does and
+  doesn't establish.
+
 ## Remaining work
 
 Ordered by what blocks the grade.
 
 1. **Ship the APK.** The only remaining hard blocker — scoped below.
 2. **Test on real hardware.** Tap a corner atom, rotate the device, open the share
-   sheet, run TalkBack/VoiceOver over the new labels. Defects like the px/dp bug only
-   reproduce on a device.
-3. **Profile and bound the viewer.** Pick a large ligand, measure, then add instancing
-   or an atom cap. This is the last section still graded partial for a real reason.
-4. **Guard the parser's inputs.** A response-size or atom-count limit, and non-finite
-   coordinate validation.
+   sheet, run TalkBack/VoiceOver over the new labels, and check the FPS/draw-call
+   overlay to confirm item 3 below actually reduced draw calls on a real GPU. Defects
+   like the px/dp bug only reproduce on a device.
+3. ~~**Profile and bound the viewer.**~~ **Done in source** (`918f98c`): instancing,
+   LOD, a molecule-size cap and FPS/draw-call instrumentation. What's left is
+   observation, not construction — folded into item 2 rather than tracked separately.
+4. ~~**Guard the parser's inputs.**~~ **Done** (`fa98272`): a non-finite coordinate
+   falls back to 0 instead of reaching the renderer, and `fetchLigandCif` rejects
+   responses over 5MB.
 5. **Use HTTPS** for any deployed backend.
 
 ## Handoff: the Android build path (rperez-t)
