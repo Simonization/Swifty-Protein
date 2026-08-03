@@ -25,6 +25,7 @@ const ERROR_TITLES: Record<RcsbErrorKind, string> = {
   offline: 'No connection',
   timeout: 'Request timed out',
   parse: 'Couldn’t read ligand',
+  too_large: 'File too large',
 };
 
 export function LigandListScreen({ navigation }: Props) {

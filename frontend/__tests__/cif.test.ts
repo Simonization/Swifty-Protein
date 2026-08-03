@@ -58,6 +58,35 @@ describe('parseLigandCif — single-row categories', () => {
   });
 });
 
+// A malformed coordinate token must not propagate NaN/Infinity into the
+// renderer — it degrades to "atom at the ligand center" instead.
+describe('parseLigandCif — non-finite coordinates', () => {
+  const withXToken = (token: string): string =>
+    [
+      'data_BAD',
+      '_chem_comp.id BAD',
+      'loop_',
+      '_chem_comp_atom.comp_id',
+      '_chem_comp_atom.atom_id',
+      '_chem_comp_atom.type_symbol',
+      '_chem_comp_atom.pdbx_model_Cartn_x_ideal',
+      '_chem_comp_atom.pdbx_model_Cartn_y_ideal',
+      '_chem_comp_atom.pdbx_model_Cartn_z_ideal',
+      `BAD C1 C ${token} 0.000 0.000`,
+    ].join('\n');
+
+  it('falls back to 0 for a non-numeric coordinate token', () => {
+    const lig = parseLigandCif(withXToken('bogus'), 'BAD');
+    expect(lig.atoms).toHaveLength(1);
+    expect(lig.atoms[0].x).toBe(0);
+  });
+
+  it('falls back to 0 for a coordinate that parses to Infinity', () => {
+    const lig = parseLigandCif(withXToken('1e400'), 'BAD');
+    expect(lig.atoms[0].x).toBe(0);
+  });
+});
+
 describe('parseLigandCif — real-world ligand', () => {
   it('parses ATP to 47 atoms / 49 bonds', () => {
     const lig = parseLigandCif(load('ATP'), 'ATP');

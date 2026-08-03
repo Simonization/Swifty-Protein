@@ -137,7 +137,15 @@ export function parseLigandCif(text: string, fallbackId?: string): Ligand {
     for (const row of atomLoop.rows) {
       const name = row[nameI];
       if (name === undefined) continue;
-      const num = (idx: number): number => (isMissing(row[idx]) ? 0 : Number(row[idx]));
+      // A malformed coordinate token (or one Number() turns into Infinity) would
+      // otherwise reach THREE.Vector3 unvalidated. Treat it like a missing value:
+      // the atom lands at the ligand's center rather than propagating NaN into
+      // the renderer.
+      const num = (idx: number): number => {
+        if (isMissing(row[idx])) return 0;
+        const n = Number(row[idx]);
+        return Number.isFinite(n) ? n : 0;
+      };
       atoms.push({ id: serial, element: normalizeElement(row[elemI]), name, x: num(xI), y: num(yI), z: num(zI) });
       idByName.set(name, serial);
       serial++;
