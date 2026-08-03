@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { Alert, FlatList, InteractionManager, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -23,15 +23,35 @@ type Filter = 'all' | 'favorites';
 const ERROR_TITLES: Record<RcsbErrorKind, string> = {
   not_found: 'Ligand not found',
   offline: 'No connection',
+  // A 5xx is not the same failure as a dead network, and titling it "No
+  // connection" over a body that says "RCSB returned 503" reads as a bug.
+  server: 'RCSB unavailable',
   timeout: 'Request timed out',
   parse: 'Couldn’t read ligand',
   too_large: 'File too large',
 };
 
+// Rows are a fixed height so FlatList can lay them out without measuring.
+// Kept next to the style that enforces it — the two must not drift.
+const ROW_HEIGHT = 64;
+const ROW_GAP = spacing(2.5);
+const ROW_STRIDE = ROW_HEIGHT + ROW_GAP;
+
+const keyExtractor = (id: string) => id;
+
+const getItemLayout = (_: ArrayLike<string> | null | undefined, index: number) => ({
+  length: ROW_STRIDE,
+  offset: ROW_STRIDE * index,
+  index,
+});
+
 export function LigandListScreen({ navigation }: Props) {
   const { logout } = useAuth();
   const [query, setQuery] = useState('');
   const [pendingId, setPendingId] = useState<string | null>(null);
+  // The re-entrancy guard has to be a ref: handleSelect is memoised so that rows
+  // can be, and reading `pendingId` from its closure would be a render behind.
+  const pendingRef = useRef<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [cached, setCached] = useState<Map<string, CachedLigand>>(new Map());
@@ -70,32 +90,61 @@ export function LigandListScreen({ navigation }: Props) {
     );
   }, [query, filter, favorites, cached]);
 
-  const toggleFavorite = (id: string) => {
-    const next = new Set(favorites);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setFavorites(next);
-    // Best-effort, like the ligand cache: a failed write costs this favourite
-    // on the next launch and nothing else, so it must not interrupt the tap.
-    void writeFavorites([...next]).catch(() => {});
-  };
+  const toggleFavorite = useCallback((id: string) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      // Best-effort, like the ligand cache: a failed write costs this favourite
+      // on the next launch and nothing else, so it must not interrupt the tap.
+      void writeFavorites([...next]).catch(() => {});
+      return next;
+    });
+  }, []);
 
-  const handleSelect = async (id: string) => {
-    if (pendingId) return; // one fetch at a time
-    setPendingId(id);
-    try {
-      const ligand = await loadLigand(id);
-      navigation.navigate('LigandView', { ligand });
-    } catch (err) {
-      if (err instanceof RcsbError) {
-        Alert.alert(ERROR_TITLES[err.kind], err.message);
-      } else {
-        Alert.alert('Something went wrong', 'Please try again.');
+  const handleSelect = useCallback(
+    async (id: string) => {
+      if (pendingRef.current) return; // one fetch at a time
+      pendingRef.current = id;
+      setPendingId(id);
+      try {
+        const ligand = await loadLigand(id);
+        navigation.navigate('LigandView', { ligand });
+      } catch (err) {
+        const [title, message] =
+          err instanceof RcsbError
+            ? [ERROR_TITLES[err.kind], err.message]
+            : ['Something went wrong', 'Please try again.'];
+        // Order matters, and only on iOS. `Alert` is presented on the topmost
+        // view controller, which while the loading Modal is up is the Modal —
+        // so dismissing the Modal a moment later takes the alert down with it
+        // and the user never sees why the ligand failed. Drop the overlay
+        // first, then alert once the dismissal animation has run.
+        pendingRef.current = null;
+        setPendingId(null);
+        InteractionManager.runAfterInteractions(() => Alert.alert(title, message));
+        return;
       }
-    } finally {
+      pendingRef.current = null;
       setPendingId(null);
-    }
-  };
+    },
+    [navigation],
+  );
+
+  // Stable identity, so React.memo on the row actually holds: without this a
+  // fresh arrow per render would re-render every visible row on every keystroke.
+  const renderItem = useCallback(
+    ({ item }: { item: string }) => (
+      <LigandRow
+        id={item}
+        info={cached.get(item)}
+        favorite={favorites.has(item)}
+        onPress={handleSelect}
+        onToggleFavorite={toggleFavorite}
+      />
+    ),
+    [cached, favorites, handleSelect, toggleFavorite],
+  );
 
   return (
     <SafeAreaView style={styles.fill}>
@@ -144,20 +193,17 @@ export function LigandListScreen({ navigation }: Props) {
 
       <FlatList
         data={filtered}
-        keyExtractor={(id) => id}
+        keyExtractor={keyExtractor}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={24}
         windowSize={10}
-        renderItem={({ item }) => (
-          <LigandRow
-            id={item}
-            info={cached.get(item)}
-            favorite={favorites.has(item)}
-            onPress={() => handleSelect(item)}
-            onToggleFavorite={() => toggleFavorite(item)}
-          />
-        )}
+        removeClippedSubviews
+        // Every row is exactly ROW_HEIGHT tall, so FlatList can place them
+        // without measuring — that's what keeps scrolling and per-keystroke
+        // filtering smooth across 1,243 entries.
+        getItemLayout={getItemLayout}
+        renderItem={renderItem}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyText}>
@@ -177,7 +223,7 @@ export function LigandListScreen({ navigation }: Props) {
 // A cached ligand knows its own name and formula, so its row can show what an
 // id alone cannot — and say out loud that it opens with no connection (VII.2's
 // custom cells, and the only visible sign that VII.4's cache exists).
-function LigandRow({
+const LigandRow = memo(function LigandRow({
   id,
   info,
   favorite,
@@ -187,13 +233,15 @@ function LigandRow({
   id: string;
   info?: CachedLigand;
   favorite: boolean;
-  onPress: () => void;
-  onToggleFavorite: () => void;
+  // Take the id rather than closing over it, so the parent can hand every row
+  // the same two memoised functions.
+  onPress: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
 }) {
   const subtitle = info ? [info.name, info.formula].filter(Boolean).join(' · ') : null;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => onPress(id)}
       accessibilityRole="button"
       accessibilityLabel={[id, subtitle, info && 'available offline'].filter(Boolean).join(', ')}
       accessibilityHint="Opens the 3D viewer"
@@ -217,7 +265,7 @@ function LigandRow({
         </View>
       ) : null}
       <Pressable
-        onPress={onToggleFavorite}
+        onPress={() => onToggleFavorite(id)}
         hitSlop={10}
         accessibilityRole="button"
         accessibilityLabel={favorite ? `Remove ${id} from favorites` : `Add ${id} to favorites`}
@@ -232,7 +280,7 @@ function LigandRow({
       </Pressable>
     </Pressable>
   );
-}
+});
 
 function FilterChip({
   label,
@@ -304,9 +352,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
-    paddingVertical: spacing(3.5),
+    // Fixed, not padding-derived: getItemLayout above promises FlatList this
+    // exact height, and a cached row (which has a subtitle) would otherwise be
+    // taller than an uncached one.
+    height: ROW_HEIGHT,
     paddingHorizontal: spacing(4),
-    marginBottom: spacing(2.5),
+    marginBottom: ROW_GAP,
   },
   rowPressed: { opacity: 0.7 },
   rowIcon: {

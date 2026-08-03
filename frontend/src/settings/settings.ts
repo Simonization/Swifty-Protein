@@ -15,12 +15,16 @@ export interface Settings {
   apiBaseUrl: string;
   defaultMode: ViewMode;
   showLabelsByDefault: boolean;
+  // Whether the first-run tour has been dismissed (bonus VII.2 onboarding).
+  // Lives here rather than in its own file so there is one thing to clear.
+  onboardingSeen: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   apiBaseUrl: DEFAULT_API_BASE_URL,
   defaultMode: 'ballStick',
   showLabelsByDefault: false,
+  onboardingSeen: false,
 };
 
 export const isValidApiUrl = (url: string): boolean => /^https?:\/\/\S+$/i.test(url.trim());
@@ -43,6 +47,10 @@ function coerce(raw: unknown): Settings {
       typeof value.showLabelsByDefault === 'boolean'
         ? value.showLabelsByDefault
         : DEFAULT_SETTINGS.showLabelsByDefault,
+    onboardingSeen:
+      typeof value.onboardingSeen === 'boolean'
+        ? value.onboardingSeen
+        : DEFAULT_SETTINGS.onboardingSeen,
   };
 }
 

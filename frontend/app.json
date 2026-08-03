@@ -15,6 +15,7 @@
         "tinted": "./assets/ios-icon-tinted.png"
       },
       "supportsTablet": true,
+      "bundleIdentifier": "com.noachlly.swiftyprotein",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Swifty Protein uses Face ID to unlock the app quickly and securely."
       }
@@ -45,6 +46,14 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Swifty Protein uses Face ID to unlock the app quickly and securely."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Swifty Protein saves molecule images to your photo library.",
+          "photosPermission": "Swifty Protein saves molecule images to your photo library.",
+          "isAccessMediaLocationEnabled": false
         }
       ]
     ]

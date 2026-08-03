@@ -5,7 +5,17 @@
 // itself. Being able to point the app at the evaluator's laptop at runtime is
 // what makes a build usable anywhere but the machine that produced it.
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,6 +59,14 @@ export function SettingsScreen({ navigation }: Props) {
     }
   };
 
+  const replayOnboarding = async () => {
+    try {
+      await save({ onboardingSeen: false });
+    } catch {
+      Alert.alert('Couldn’t save settings', 'Please try again.');
+    }
+  };
+
   const restoreDefaults = () => {
     setApiBaseUrl(DEFAULT_SETTINGS.apiBaseUrl);
     setDefaultMode(DEFAULT_SETTINGS.defaultMode);
@@ -74,7 +92,20 @@ export function SettingsScreen({ navigation }: Props) {
         <View style={styles.iconButton} />
       </View>
 
-      <View style={styles.body}>
+      {/* Scroll + keyboard avoidance, the same two wrappers components/Screen
+          gives the login forms. Not `Screen` itself, because that centres its
+          content and this screen has a pinned header. Without them the Save
+          button sits off-screen in landscape and behind the keyboard on a small
+          phone — on the one screen the jury needs to reach the backend URL. */}
+      <KeyboardAvoidingView
+        style={styles.fill}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+      <ScrollView
+        style={styles.fill}
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.sectionLabel}>Server</Text>
         <TextField
           label="Backend URL"
@@ -127,8 +158,12 @@ export function SettingsScreen({ navigation }: Props) {
         <View style={styles.actions}>
           <Button label="Save" onPress={submit} loading={saving} />
           <Button label="Restore defaults" onPress={restoreDefaults} variant="ghost" />
+          {/* The first-run tour is otherwise unreachable after the first run,
+              which makes it impossible to demonstrate without reinstalling. */}
+          <Button label="Show the intro again" onPress={replayOnboarding} variant="ghost" />
         </View>
-      </View>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -144,7 +179,12 @@ const styles = StyleSheet.create({
   },
   iconButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   title: { ...typography.title, color: colors.text },
-  body: { flex: 1, paddingHorizontal: spacing(6), paddingTop: spacing(2) },
+  body: {
+    flexGrow: 1,
+    paddingHorizontal: spacing(6),
+    paddingTop: spacing(2),
+    paddingBottom: spacing(8),
+  },
   sectionLabel: {
     ...typography.label,
     color: colors.primary,

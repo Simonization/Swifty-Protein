@@ -3,6 +3,7 @@ import { DarkTheme, NavigationContainer, type Theme as NavTheme } from '@react-n
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { SplashScreen } from '../screens/SplashScreen';
+import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { LigandListScreen } from '../screens/LigandListScreen';
@@ -21,13 +22,15 @@ const navTheme: NavTheme = {
   colors: { ...DarkTheme.colors, background: colors.bg, card: colors.bg, border: colors.border, primary: colors.primary },
 };
 
-const MIN_SPLASH_MS = 1200;
+// The subject asks for "at least 1-2 seconds" and the evaluation sheet for
+// "1 sec minimum". 1600ms sits inside both with room for a slow first render.
+const MIN_SPLASH_MS = 1600;
 
 export function RootNavigator() {
   const { status } = useAuth();
   // Hold the splash until settings have loaded: the persisted server URL has to
   // reach the API client before any screen can try to log in.
-  const { ready: settingsReady } = useSettings();
+  const { ready: settingsReady, settings, save } = useSettings();
   const [splashElapsed, setSplashElapsed] = useState(false);
 
   useEffect(() => {
@@ -41,6 +44,11 @@ export function RootNavigator() {
     <NavigationContainer theme={navTheme}>
       {showSplash ? (
         <SplashScreen />
+      ) : status === 'unlocked' && !settings.onboardingSeen ? (
+        // After the gate, not before it: the tour describes the app, and the
+        // subject requires the Login view to be the first thing on every launch.
+        // A failed write only means the tour is offered again next time.
+        <OnboardingScreen onDone={() => void save({ onboardingSeen: true }).catch(() => {})} />
       ) : status === 'unlocked' ? (
         <AppStack.Navigator screenOptions={{ headerShown: false }}>
           <AppStack.Screen name="LigandList" component={LigandListScreen} />

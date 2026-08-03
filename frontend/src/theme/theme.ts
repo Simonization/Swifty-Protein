@@ -13,7 +13,10 @@ export const colors = {
 
   text: '#E8EDF6',
   textMuted: '#8B96AE',
-  textFaint: '#5A6480',
+  // Contrast against `bg` is checked, not eyeballed: this is the dimmest colour
+  // that still clears WCAG AA (4.5:1) for normal text. #5A6480 was 3.28:1 and is
+  // used for placeholders and the viewer's gesture hint, which have to be legible.
+  textFaint: '#7B87A3',
 
   success: '#34D399',
   danger: '#FB7185',

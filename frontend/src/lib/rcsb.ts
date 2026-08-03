@@ -11,11 +11,14 @@
 // on top in ../data/ligands.ts, which is the app layer this file always
 // expected to be wrapped by.
 
-export type RcsbErrorKind = 'not_found' | 'offline' | 'timeout' | 'parse' | 'too_large';
+export type RcsbErrorKind = 'not_found' | 'offline' | 'server' | 'timeout' | 'parse' | 'too_large';
 
 const MESSAGES: Record<RcsbErrorKind, string> = {
   not_found: 'Ligand not found (404). This ligand may not exist in the database.',
   offline: 'No internet connection. Please check your network.',
+  // Reached us, but failed at their end — a different fix for the user than
+  // "check your network", so a different kind.
+  server: 'RCSB could not serve this ligand right now. Please try again shortly.',
   timeout: 'Request timeout. Please try again.',
   parse: 'Failed to parse ligand data. The file may be corrupted.',
   too_large: 'This ligand file is too large to load. Please try a different ligand.',
@@ -55,7 +58,7 @@ export async function fetchLigandCif(code: string, timeoutMs = 8000): Promise<st
   }
 
   if (res.status === 404) throw new RcsbError('not_found');
-  if (!res.ok) throw new RcsbError('offline', `RCSB returned ${res.status}. Please try again.`);
+  if (!res.ok) throw new RcsbError('server', `RCSB returned ${res.status}. Please try again shortly.`);
 
   const text = await res.text();
   if (text.length > MAX_RESPONSE_BYTES) throw new RcsbError('too_large');
