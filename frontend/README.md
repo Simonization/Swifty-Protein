@@ -19,6 +19,11 @@ phone, `localhost` is the phone). `.env` is optional and only sets the *default*
 `cp .env.example .env`.
 
 - `npm run ios` / `npm run android` — launch directly in a simulator/emulator.
+- `npm run apk` — generate the native Android project and build an installable
+  release APK. The result is written to
+  `android/app/build/outputs/apk/release/app-release.apk`. This requires a local
+  Android SDK, Java, and `ANDROID_HOME` (or `ANDROID_SDK_ROOT`) to be configured.
+  The generated `android/` directory is intentionally ignored by Git.
 - `npm run web` — quickest look at theme/layout (no camera/biometrics/GL there).
 - `npm test` — unit tests under `jest-expo`: CIF parser, ligand load policy, API URL.
 

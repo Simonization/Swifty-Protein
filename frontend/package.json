@@ -38,6 +38,7 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
+    "apk": "NODE_ENV=production expo prebuild --platform android --no-install && cd android && ./gradlew assembleRelease",
     "web": "expo start --web",
     "test": "jest",
     "gen:ligands": "node scripts/gen-ligand-ids.js"
