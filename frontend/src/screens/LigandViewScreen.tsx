@@ -169,6 +169,12 @@ export function LigandViewScreen({ route, navigation }: Props) {
           showLabels={showLabels}
           measureMode={measureMode}
           onSelectionChange={setSelection}
+          onTooLarge={(info) =>
+            Alert.alert(
+              'Molecule too large to display',
+              `This ligand has ${info.atoms} atoms and ${info.bonds} bonds, past the ${info.maxAtoms}/${info.maxBonds} limit this viewer can render.`
+            )
+          }
         />
 
         {selection && <SelectionTooltip selection={selection} />}
