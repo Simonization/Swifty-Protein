@@ -12,11 +12,17 @@ Then get the app onto an Android phone. Two routes:
 **Route 1 — an APK.** This is the real app, with the real launcher icon and the
 real native launch screen, and it keeps working if the laptop's Wi-Fi drops.
 Check the [Releases](../../releases) page: if a build is published, download it,
-copy it to the phone and open it. If not, one command produces one —
-`cd frontend && npx eas build -p android --profile preview` needs an Expo account
-and network but **no local Android toolchain at all**. See
-[Building the APK yourself](#building-the-apk-yourself) for the local-Gradle
-alternative.
+copy it to the phone and open it. If not, one command produces one:
+
+```bash
+make apk    # builds it, and installs it if a phone is plugged in
+```
+
+`make apk` needs a JDK 17+ and an Android SDK; it checks for both before doing
+anything and tells you what is missing. If this machine has neither, the cloud
+route needs **no local Android toolchain at all** —
+`cd frontend && npx eas build -p android --profile preview` (an Expo account and
+network). See [Building the APK yourself](#building-the-apk-yourself).
 
 **Route 2 — run it from source.**
 ```bash
@@ -117,8 +123,10 @@ Also worth exercising:
 
 ```
 make help      # list all targets
-make doctor    # check dependencies
+make doctor    # check dependencies (incl. APK toolchain + whether a phone is visible)
 make test      # run both test suites (no Docker needed)
+make apk       # build dist/app-release.apk, then install it on a plugged-in phone
+make install   # install an already-built dist/app-release.apk
 make up        # start backend + database (detached), then verify /health
 make down      # stop everything
 make logs      # tail logs
@@ -134,15 +142,24 @@ build one. If you want to, this is an Expo managed app with no committed `androi
 directory, so the native project is generated first. Two routes, both needing network:
 
 ```bash
-cd frontend
+# Local: checks the toolchain, generates android/, runs Gradle, then installs
+# on a plugged-in phone. Needs an Android SDK and a JDK 17+.
+make apk
+# -> dist/app-release.apk
 
-# Local: generates android/, then Gradle. Needs an Android SDK, a JDK and ANDROID_HOME.
-npm run apk
-# -> android/app/build/outputs/apk/release/app-release.apk
+# Already built it, and now the phone is plugged in:
+make install
 
 # Hosted: no local Android toolchain at all (needs an Expo account).
-npx eas build --platform android --profile preview
+cd frontend && npx eas build --platform android --profile preview
 ```
+
+**Getting it onto the phone.** `make apk` installs it for you if `adb` sees a phone
+with **Developer options → USB debugging** enabled (`make doctor` says whether it
+does). Otherwise copy `dist/app-release.apk` across by any means — USB, Drive,
+email — open it on the phone, and allow "install from unknown sources". On WSL2,
+a USB phone is invisible to Linux unless forwarded with `usbipd-win`, so copying
+by hand is usually the shorter path there.
 
 Both produce a **debug-signed** APK — Expo's Android template signs the `release`
 build type with the debug keystore, and there is no release keystore in this

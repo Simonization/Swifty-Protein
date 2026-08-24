@@ -24,13 +24,21 @@ phone, `localhost` is the phone). `.env` is optional and only sets the *default*
 
 ## Building an APK
 
-Two routes, and they are complements rather than alternatives — use whichever
+**From the repo root, `make apk` is the supported entry point.** It checks the
+toolchain first (Node 20+, JDK 17+, an Android SDK) so a missing JDK is one line
+rather than a Gradle stack trace, builds, copies the result to
+`dist/app-release.apk`, and — if a phone is plugged in with USB debugging on —
+installs it over `adb`. `make install` does just that last step on an APK you
+already built. `make doctor` reports the same toolchain and whether a phone is
+visible, without building anything.
+
+Underneath, two routes, complements rather than alternatives — use whichever
 your machine supports.
 
-- **`npm run apk`** — local build. Runs `expo prebuild` and then Gradle, writing
-  `android/app/build/outputs/apk/release/app-release.apk`. Needs a local Android
-  SDK, a JDK, and `ANDROID_HOME` (or `ANDROID_SDK_ROOT`). The generated
-  `android/` directory is intentionally ignored by Git.
+- **`npm run apk`** — the raw local build `make apk` wraps: `expo prebuild` and
+  then Gradle, writing `android/app/build/outputs/apk/release/app-release.apk`.
+  Needs a local Android SDK, a JDK, and `ANDROID_HOME` (or `ANDROID_SDK_ROOT`).
+  The generated `android/` directory is intentionally ignored by Git.
 - **`npx eas build -p android --profile preview`** — cloud build, configured in
   `eas.json`. Needs an Expo account and network, but **no local Android
   toolchain**, which is what makes it usable from a machine (or a WSL2 shell)

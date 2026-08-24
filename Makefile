@@ -8,7 +8,7 @@ COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compos
 
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor test up down logs clean
+.PHONY: help doctor test apk install up down logs clean
 
 help: ## Show this help
 	@echo "Swifty-Proteins — available commands:"
@@ -16,7 +16,7 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-10s\033[0m %s\n", $$1, $$2}'
 	@echo
-	@echo "Typical jury flow:  make doctor  →  make up  →  cd frontend && npx expo start"
+	@echo "Typical jury flow:  make doctor  →  make up  →  make apk  (or: cd frontend && npx expo start)"
 
 doctor: ## Check that required dependencies are installed
 	@bash scripts/doctor.sh
@@ -26,6 +26,12 @@ test: ## Run both test suites (backend + app), no Docker needed
 	@cd backend && npm ci --silent && npm test
 	@echo ">> frontend"
 	@cd frontend && npm ci --silent && npx tsc --noEmit && npx jest
+
+apk: ## Build the Android APK into dist/, then install it on a plugged-in phone
+	@bash scripts/apk.sh
+
+install: ## Install an already-built dist/app-release.apk on a plugged-in phone
+	@bash scripts/apk.sh --install-only
 
 up: ## Start backend + database (detached)
 	@bash scripts/ensure-env.sh

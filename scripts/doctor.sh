@@ -82,6 +82,48 @@ printf "\n${BOLD}On the phone:${NC}\n"
 printf "  Install ${BOLD}Expo Go${NC} from the Play Store, then scan the QR from 'npx expo start'.\n"
 printf "  The phone and this machine must be on the same network.\n"
 
+# --- OPTIONAL: the APK route ('make apk') ----------------------------------
+# Not required to run the project — Expo Go covers that — but it is the only way
+# to see the real launcher icon and the native launch screen (VI.1).
+printf "\n${BOLD}Optional (to build an APK with 'make apk'):${NC}\n"
+
+if command -v java >/dev/null 2>&1; then
+  java_major="$(java -version 2>&1 | sed -n '1s/.*version "\([0-9]*\).*/\1/p')"
+  if [ "${java_major:-0}" -ge 17 ]; then
+    ok "java $(java -version 2>&1 | head -1 | sed 's/.*version "\([^"]*\)".*/\1/')"
+  else
+    warn "java ${java_major:-?} is too old for React Native 0.86 — needs JDK 17+"
+  fi
+else
+  warn "no JDK (needed only for a local APK build)"
+fi
+
+sdk=""
+for c in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}" "$HOME/Android/Sdk" \
+         "$HOME/Library/Android/sdk" "/usr/lib/android-sdk" "/opt/android-sdk"; do
+  [ -n "$c" ] && [ -d "$c/platform-tools" ] && { sdk="$c"; break; }
+done
+if [ -n "$sdk" ]; then ok "android sdk — $sdk"
+else warn "no Android SDK (needed only for a local APK build)"; fi
+
+# Phone detection: adb lives in the SDK, and is what 'make apk' uses to install.
+adb_bin="$(command -v adb 2>/dev/null)"
+[ -z "$adb_bin" ] && [ -n "$sdk" ] && [ -x "$sdk/platform-tools/adb" ] && adb_bin="$sdk/platform-tools/adb"
+if [ -n "$adb_bin" ]; then
+  n="$("$adb_bin" devices 2>/dev/null | tail -n +2 | awk '$2 == "device"' | grep -c .)"
+  if [ "$n" -gt 0 ]; then ok "adb sees $n connected device(s) — 'make apk' can install directly"
+  else warn "adb found, but no phone connected (Developer options → USB debugging, then plug in)"; fi
+else
+  warn "adb not found — 'make apk' will still build; copy the APK to the phone by hand"
+fi
+
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  warn "WSL detected: USB phones are invisible to Linux unless forwarded with usbipd-win"
+fi
+
+printf "  No JDK or SDK? Build in the cloud instead — no local Android toolchain needed:\n"
+printf "    cd frontend && npx eas build --platform android --profile preview\n"
+
 # KVM speeds up an Android emulator on the host (jury may prefer a real device)
 printf "\n${BOLD}Optional (emulator instead of a real device):${NC}\n"
 if [ "$OS" = "linux" ]; then
