@@ -1,5 +1,5 @@
 // Client-side mirror of the backend's credentials schema (backend/src/routes/auth.js,
-// documented in API.md). The server validates these regardless and answers 400;
+// documented in README.md). The server validates these regardless and answers 400;
 // checking here is only so the user gets a message without a round-trip.
 //
 // Kept in one place so the Login and Register screens cannot drift apart, or from

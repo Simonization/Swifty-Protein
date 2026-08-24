@@ -1,7 +1,7 @@
 # Swifty-Proteins frontend
 
 React Native (Expo) app: auth flow (Login/Register + biometric unlock + foreground
-re-lock) against the [API contract](../API.md), ligand list + search, and the 3D
+re-lock) against the [API contract](../README.md#the-auth-api), ligand list + search, and the 3D
 molecule viewer — plus the shared molecular core (CIF parser, RCSB fetch, CPK
 element data) the viewer consumes.
 

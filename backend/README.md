@@ -1,7 +1,7 @@
 # Swifty-Proteins backend
 
 **Auth-only** Fastify API for the Swifty-Proteins app. Implements the
-[API contract](../API.md). The ligand pipeline (RCSB fetch + CIF parsing) lives in
+[API contract](../README.md#the-auth-api). The ligand pipeline (RCSB fetch + CIF parsing) lives in
 the app, not here — see `frontend/src/lib/`.
 
 ## Run locally (without Docker)

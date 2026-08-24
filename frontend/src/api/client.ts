@@ -1,4 +1,4 @@
-// Thin client for the auth-only backend (see ../../../API.md for the contract).
+// Thin client for the auth-only backend (see ../../../README.md for the contract).
 //
 // EXPO_PUBLIC_API_URL is inlined at build time, and its default points at the
 // device itself -- useless on a real phone, where the backend is on someone

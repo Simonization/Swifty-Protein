@@ -4,7 +4,7 @@
 #   make up  → starts db + backend   (what the jury runs)
 #
 # The app itself is not built here: it is an Expo managed app, run on a device
-# with `npx expo start`. See JURY.md.
+# with `npx expo start`. See README.md.
 # =============================================================================
 
 services:

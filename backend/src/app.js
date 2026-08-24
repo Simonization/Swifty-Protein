@@ -41,7 +41,7 @@ export async function buildApp(opts = {}) {
 
   // JWT: adds reply.jwtSign() and request.jwtVerify().
   // expiresIn is set here rather than per-call so no route can mint an eternal
-  // token by forgetting it. Documented in API.md.
+  // token by forgetting it. Documented in README.md.
   await app.register(jwt, { secret: config.jwtSecret, sign: { expiresIn: config.jwtTtl } });
 
   // Reusable guard for protected routes: `{ preHandler: app.authenticate }`.
@@ -55,7 +55,7 @@ export async function buildApp(opts = {}) {
     }
   });
 
-  // One consistent error shape (matches API.md).
+  // One consistent error shape (matches README.md).
   app.setErrorHandler((err, request, reply) => {
     if (err.validation) {
       return reply
@@ -74,7 +74,7 @@ export async function buildApp(opts = {}) {
     // A malformed JSON body or a wrong Content-Type is the client sending
     // something we can't read — a validation failure, not an internal one.
     // These arrive with a 4xx statusCode but no `.validation`, so without this
-    // branch they were answered `400 internal_error`, contradicting API.md.
+    // branch they were answered `400 internal_error`, contradicting README.md.
     const status = err.statusCode ?? 500;
     if (status >= 400 && status < 500) {
       return reply
