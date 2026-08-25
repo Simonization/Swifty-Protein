@@ -115,22 +115,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, status: 'unlocked', user, token }));
   }, []);
 
+  // A failed write must never reject an authentication the server already
+  // granted. It used to: saveSession threw, register() rejected, and the screen
+  // said "Something went wrong" about an account that had just been created --
+  // so trying again answered "username already taken". Persistence only decides
+  // whether the *next* cold start can offer biometric unlock instead of the
+  // password, and the subject requires the Login view on every launch anyway.
+  const persistSession = useCallback(async (token: string, user: User) => {
+    try {
+      await saveSession(token, user);
+    } catch {
+      // Keychain/Keystore unavailable. The session lives in state for this run.
+    }
+  }, []);
+
   const register = useCallback(
     async (username: string, password: string) => {
       const { token, user } = await authApi.register(username, password);
-      await saveSession(token, user);
+      await persistSession(token, user);
       unlock(user, token);
     },
-    [unlock],
+    [unlock, persistSession],
   );
 
   const loginWithPassword = useCallback(
     async (username: string, password: string) => {
       const { token, user } = await authApi.login(username, password);
-      await saveSession(token, user);
+      await persistSession(token, user);
       unlock(user, token);
     },
-    [unlock],
+    [unlock, persistSession],
   );
 
   // Re-gates access to the already-stored session without hitting the network.
