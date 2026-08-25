@@ -4,7 +4,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Sharing from 'expo-sharing';
-import * as MediaLibrary from 'expo-media-library';
 
 import {
   MoleculeViewer,
@@ -16,6 +15,11 @@ import { SelectionTooltip } from '../components/SelectionTooltip';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { colors, radii, spacing, typography } from '../theme/theme';
 import { VIEW_MODES } from '../data/viewModes';
+import {
+  photoLibraryAvailable,
+  requestPhotoPermission,
+  saveImageToPhotos,
+} from '../lib/photoLibrary';
 import { useSettings } from '../settings/SettingsContext';
 import { useAuth } from '../auth/AuthContext';
 import { useOrientation } from '../hooks/useOrientation';
@@ -94,8 +98,8 @@ export function LigandViewScreen({ route, navigation }: Props) {
     if (busy) return;
     setBusy('save');
     try {
-      const permission = await MediaLibrary.requestPermissionsAsync();
-      if (!permission.granted) {
+      const granted = await requestPhotoPermission();
+      if (!granted) {
         Alert.alert(
           'Permission needed',
           'Swifty Protein needs access to your photo library to save the image.',
@@ -104,7 +108,7 @@ export function LigandViewScreen({ route, navigation }: Props) {
       }
       const uri = await snapshot();
       if (!uri) return;
-      await MediaLibrary.saveToLibraryAsync(uri);
+      await saveImageToPhotos(uri);
       Alert.alert('Saved to Photos', `${describeLigand(ligand)}\n\nThe image is in your gallery.`);
     } catch {
       Alert.alert('Couldn’t save', 'The image could not be saved to your photo library.');
@@ -141,6 +145,8 @@ export function LigandViewScreen({ route, navigation }: Props) {
           )}
         </View>
         <View style={styles.headerActions}>
+          {/* Hidden on web, where there is no gallery to save into. */}
+          {photoLibraryAvailable && (
           <Pressable
             onPress={handleSaveToPhotos}
             hitSlop={8}
@@ -158,6 +164,7 @@ export function LigandViewScreen({ route, navigation }: Props) {
               color={colors.primary}
             />
           </Pressable>
+          )}
           <Pressable
             onPress={handleShare}
             hitSlop={8}
