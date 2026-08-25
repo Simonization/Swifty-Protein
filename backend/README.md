@@ -8,9 +8,13 @@ the app, not here — see `frontend/src/lib/`.
 
 ```bash
 npm ci             # never `npm install` — the lockfile is the reproducibility guarantee
-cp .env.example .env   # optional; `npm run dev` loads it if present
 npm run dev        # http://localhost:3000 (auto-reload, in-memory accounts)
 ```
+
+`.env` is genuinely optional — `cp .env.example .env` if you want to override a
+default, and `npm run dev` picks it up. (It loads through `--import src/loadEnv.js`
+rather than `--env-file-if-exists`, because the latter cannot be combined with
+`--watch`: watch mode registers the env file and throws ENOENT when it is absent.)
 
 Accounts are in-memory unless `DATABASE_URL` is set. For Postgres-backed accounts,
 run the stack with Docker from the repo root: `make up` (compose provides the DB).

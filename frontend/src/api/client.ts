@@ -31,10 +31,18 @@ export type ApiErrorCode =
   | 'timeout';
 
 const FRIENDLY_MESSAGES: Partial<Record<ApiErrorCode, string>> = {
-  network_error: 'No internet connection. Please check your network and try again.',
+  network_error: 'Could not reach the server. Check the address in Settings.',
   timeout: 'Request timed out. Please try again.',
   internal_error: 'Something went wrong on our end. Please try again shortly.',
 };
+
+// A failed fetch here is almost never "no internet" -- the backend is a laptop on
+// the same LAN, and the address is a setting that starts out wrong on any device
+// that did not build the app. Saying "check your network" sent people to their
+// wi-fi settings; naming the address they are actually failing to reach sends
+// them to the one control that fixes it.
+export const describeNetworkFailure = (url: string): string =>
+  `Could not reach the server at ${url}. Check it is running, and that the address in Settings is right — on a phone, “localhost” means the phone itself.`;
 
 export class ApiError extends Error {
   code: ApiErrorCode;
@@ -71,7 +79,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     if ((err as Error)?.name === 'AbortError') {
       throw new ApiError('timeout', FRIENDLY_MESSAGES.timeout!);
     }
-    throw new ApiError('network_error', FRIENDLY_MESSAGES.network_error!);
+    throw new ApiError('network_error', describeNetworkFailure(apiBaseUrl));
   } finally {
     clearTimeout(timer);
   }

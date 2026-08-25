@@ -120,6 +120,10 @@ make up        # backend API + database in Docker; verifies /health before retur
 `make up` generates a random `JWT_SECRET` into `.env` on first run, then polls
 `/health` and fails loudly if the backend did not actually come up.
 
+Just want to try the app? `cd backend && npm ci && npm start` runs the same API
+with accounts in memory — no Docker, no Postgres. Accounts vanish when you stop
+it, which is fine for a test drive.
+
 Then get the app onto a phone, either way:
 
 ```bash
@@ -164,9 +168,11 @@ Both routes produce a **debug-signed** APK: Expo's Android template signs the
 this repository. It installs and runs; it is simply not store-signed, which
 nothing here needs.
 
-Once the app is installed, point it at this machine: **Settings → Backend URL**,
-using the LAN IP, e.g. `http://192.168.1.20:3000`. On a phone, `localhost` means
-*the phone*, so it will never reach the backend.
+Once the app is installed, point it at this machine: on the login screen, tap
+**"Can't connect? Set the server address"**, and enter the LAN IP, e.g.
+`http://192.168.1.20:3000`. On a phone, `localhost` means *the phone*, so the
+built-in default will never reach the backend. The same screen is under
+**Settings** once you are logged in.
 
 ## What to try
 

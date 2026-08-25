@@ -59,6 +59,12 @@ export function RootNavigator() {
         <AuthStack.Navigator screenOptions={{ headerShown: false }}>
           <AuthStack.Screen name="Login" component={LoginScreen} />
           <AuthStack.Screen name="Register" component={RegisterScreen} />
+          {/* Also here, not only behind the gate. The backend URL defaults to
+              localhost, which on a phone is the phone; if Settings were only in
+              the authenticated stack, an install that cannot reach the server
+              could never be pointed at one -- login needs the server, and
+              fixing the server address needed the login. */}
+          <AuthStack.Screen name="Settings" component={SettingsScreen} />
         </AuthStack.Navigator>
       )}
     </NavigationContainer>

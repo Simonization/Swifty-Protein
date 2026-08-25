@@ -28,9 +28,13 @@ import { useSettings } from '../settings/SettingsContext';
 import { DEFAULT_SETTINGS, isValidApiUrl } from '../settings/settings';
 import { VIEW_MODES } from '../data/viewModes';
 import type { ViewMode } from '../components/MoleculeViewer';
-import type { AppStackParamList } from '../navigation/types';
+import type { AppStackParamList, AuthStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<AppStackParamList, 'Settings'>;
+// Registered in both navigators, so it is typed against both. The screen only
+// ever calls navigation.goBack(), which both stacks provide.
+type Props =
+  | NativeStackScreenProps<AppStackParamList, 'Settings'>
+  | NativeStackScreenProps<AuthStackParamList, 'Settings'>;
 
 export function SettingsScreen({ navigation }: Props) {
   const { settings, save } = useSettings();

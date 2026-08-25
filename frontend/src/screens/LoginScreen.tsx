@@ -141,6 +141,19 @@ export function LoginScreen({ navigation }: Props) {
           </Text>
         </View>
       )}
+      {/* The way out of the deadlock: the app talks to a backend on someone
+          else's machine, and until that address is right nothing here can
+          succeed -- including reaching Settings, if it lived behind the login. */}
+      <View style={styles.footerRow}>
+        <Text
+          style={styles.serverLink}
+          onPress={() => navigation.navigate('Settings')}
+          accessibilityRole="button"
+          accessibilityLabel="Can’t connect? Set the server address"
+        >
+          Can’t connect? Set the server address
+        </Text>
+      </View>
     </Screen>
   );
 }
@@ -153,4 +166,5 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing(2) },
   footerText: { ...typography.body, color: colors.textMuted },
   link: { ...typography.body, color: colors.primary, fontWeight: '700' },
+  serverLink: { ...typography.body, color: colors.textMuted, marginTop: spacing(1), textDecorationLine: 'underline' },
 });

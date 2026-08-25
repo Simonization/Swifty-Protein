@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --env-file-if-exists=.env --watch src/index.js",
+    "dev": "node --import ./src/loadEnv.js --watch src/index.js",
     "test": "node --test"
   },
   "dependencies": {
