@@ -72,8 +72,13 @@ netsh interface portproxy delete v4tov4 listenport=$METRO_PORT listenaddress=0.0
 Remove-NetFirewallRule -DisplayName 'Swifty Proteins (WSL)' -ErrorAction SilentlyContinue"
 
 run_elevated() {
+  # The payload is embedded in a single-quoted PowerShell string, and it contains
+  # single quotes of its own (the firewall rule's name). PowerShell escapes those
+  # by doubling them; without this the string terminates early and the elevated
+  # shell receives a fragment.
+  local payload="${1//\'/\'\'}"
   printf "${YELLOW}Asking Windows for elevation — accept the UAC prompt.${NC}\n"
-  "$PS" -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command','$1'" \
+  "$PS" -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command','$payload'" \
     && printf "${GREEN}Done.${NC}\n" \
     || die "Elevation failed or was declined. Run the commands by hand instead."
 }
