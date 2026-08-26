@@ -53,9 +53,17 @@
         {
           "savePhotosPermission": "Swifty Protein saves molecule images to your photo library.",
           "photosPermission": "Swifty Protein saves molecule images to your photo library.",
-          "isAccessMediaLocationEnabled": false
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": [
+            "photo"
+          ]
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "28134d49-bf61-4e76-8007-fc1d7a7dd611"
+      }
+    }
   }
 }
