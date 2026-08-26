@@ -178,7 +178,7 @@ fi
 if [ "$missing" -gt 0 ]; then
   printf "\n${YELLOW}${BOLD}%d item(s) missing — no local build is possible on this machine.${NC}\n" "$missing"
   printf "\n${BOLD}You do not need any of it if you build in the cloud instead:${NC}\n"
-  printf "    cd frontend && npx eas build --platform android --profile preview\n"
+  printf "    cd frontend && npx eas-cli build --platform android --profile preview\n"
   printf "  That needs a free Expo account and network access, and ${BOLD}no local Android\n"
   printf "  toolchain at all${NC}. It prints a download link when the build finishes.\n"
   exit 1

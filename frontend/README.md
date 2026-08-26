@@ -44,7 +44,7 @@ your machine supports.
   then Gradle, writing `android/app/build/outputs/apk/release/app-release.apk`.
   Needs a local Android SDK, a JDK, and `ANDROID_HOME` (or `ANDROID_SDK_ROOT`).
   The generated `android/` directory is intentionally ignored by Git.
-- **`npx eas build -p android --profile preview`** — cloud build, configured in
+- **`npx eas-cli build -p android --profile preview`** — cloud build, configured in
   `eas.json`. Needs an Expo account and network, but **no local Android
   toolchain**, which is what makes it usable from a machine (or a WSL2 shell)
   with no SDK installed. Produces a download link for the same kind of APK.

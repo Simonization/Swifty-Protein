@@ -166,7 +166,7 @@ No JDK or SDK on this machine? Build it in the cloud instead — no local Androi
 toolchain at all, just a free Expo account:
 
 ```bash
-cd frontend && npx eas build --platform android --profile preview
+cd frontend && npx eas-cli build --platform android --profile preview
 ```
 
 If no phone is detected, copy `dist/app-release.apk` across by any means — USB,

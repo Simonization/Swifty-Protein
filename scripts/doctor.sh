@@ -122,7 +122,7 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
 fi
 
 printf "  No JDK or SDK? Build in the cloud instead — no local Android toolchain needed:\n"
-printf "    cd frontend && npx eas build --platform android --profile preview\n"
+printf "    cd frontend && npx eas-cli build --platform android --profile preview\n"
 
 # KVM speeds up an Android emulator on the host (jury may prefer a real device)
 printf "\n${BOLD}Optional (emulator instead of a real device):${NC}\n"
