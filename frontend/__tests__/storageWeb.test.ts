@@ -9,8 +9,9 @@
 // These assert the two properties that keep that from coming back: nothing here
 // throws, and nothing here claims to have a stored session.
 import { clearSession, loadSession, saveSession } from '../src/auth/storage.web';
+import type { User } from '../src/api/auth';
 
-const user = { id: 'u1', username: 'tester' };
+const user: User = { id: 'u1', username: 'tester', createdAt: '2026-08-25T00:00:00.000Z' };
 
 describe('web session storage', () => {
   it('saving never throws, whatever it is handed', async () => {

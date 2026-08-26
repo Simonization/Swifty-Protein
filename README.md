@@ -86,6 +86,13 @@ Errors are always `{ error: { code, message } }`. Tokens carry a 7-day `exp`.
 no reason to trust. The token crosses the local network in the clear. Anything
 deployed past a demo must be HTTPS — that is a scope decision, not an oversight.
 
+That decision has a consequence on Android worth knowing about: since API 28,
+release builds block cleartext HTTP outright, and Expo only enables it in the
+*debug* manifest. So a release APK silently could not reach any `http://` backend
+— the browser and Expo Go both kept working, which is exactly what made it hard
+to see. `expo-build-properties` now sets `usesCleartextTraffic` for the release
+build too (`frontend/app.json`). An HTTPS backend would not need it.
+
 ## Who did what
 
 | Person | Scope |
