@@ -198,6 +198,12 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       { id: number; x: number; y: number; symbol: string; color: string }[]
     >([]);
     const [stats, setStats] = useState<{ fps: number; calls: number } | null>(null);
+    // A throw inside onContextCreate lands in a promise nobody awaits: GLView
+    // calls it and drops the result, so the surface stays blank and the app says
+    // nothing at all. That is the worst failure this component can have -- the
+    // molecule is simply absent, with no way to tell a GL fault from an empty
+    // ligand. Capture it and put it on screen instead.
+    const [glError, setGlError] = useState<string | null>(null);
 
     useEffect(() => {
       showLabelsRef.current = showLabels;
@@ -582,7 +588,7 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       return Gesture.Simultaneous(panOneFinger, twoFinger, doubleTap, singleTap);
     }, []);
 
-    const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
+    const initGl = async (gl: ExpoWebGLRenderingContext) => {
       // A GL surface cannot exist before its view is laid out, so onLayout has
       // normally already put the dp size in sizeRef. Preferring it, and deriving
       // the ratio from it, keeps buffer and layout consistent by construction --
@@ -835,6 +841,16 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       };
     };
 
+    const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
+      try {
+        setGlError(null);
+        await initGl(gl);
+      } catch (err) {
+        const e = err as Error;
+        setGlError(e?.message ? `${e.name}: ${e.message}` : String(err));
+      }
+    };
+
     const onLayout = (e: LayoutChangeEvent) => {
       const { width, height } = e.nativeEvent.layout;
       if (width <= 0 || height <= 0) return;
@@ -886,6 +902,11 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
               {label.symbol}
             </Text>
           ))}
+          {glError && (
+            <View style={styles.glErrorOverlay} pointerEvents="box-none">
+              <ErrorBanner message={`The 3D view could not start. ${glError}`} />
+            </View>
+          )}
           {__DEV__ && stats && (
             // Dev-only evidence that instancing landed: draw calls should be one
             // per element group plus one per bond colour (~8-16), not one per
@@ -903,6 +924,15 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
   fallback: { justifyContent: 'center', paddingHorizontal: spacing(4) },
+  glErrorOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: spacing(4),
+  },
   label: {
     position: 'absolute',
     fontSize: 11,
