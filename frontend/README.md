@@ -19,7 +19,12 @@ phone, `localhost` is the phone). `.env` is optional and only sets the *default*
 `cp .env.example .env`.
 
 - `npm run ios` / `npm run android` — launch directly in a simulator/emulator.
-- `npm run web` — quickest look at theme/layout (no camera/biometrics/GL there).
+- `npm run web` — quickest look at the app without a phone. The 3D viewer *does*
+  render there: `expo-gl` has a web implementation, so `GLView` becomes a WebGL
+  canvas and the molecule draws. What is missing is what the browser has no
+  hardware for — biometric unlock, saving to a photo library (the button is
+  hidden), and sharing. The session is kept in memory only, so reloading the tab
+  signs you out; see `src/auth/storage.web.ts` for why that is deliberate.
 - `npm test` — unit tests under `jest-expo`. `npx tsc --noEmit` type-checks.
 
 ## Building an APK
