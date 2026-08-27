@@ -73,3 +73,59 @@ export function excursionReturnRequiresRelock({
 }: ExcursionReturnInputs): boolean {
   return backgroundedAt !== null && now - backgroundedAt > maxMs;
 }
+
+// Everything the AppState listener needs to carry between events, gathered
+// into one value instead of three separately-updated refs — so the sequence
+// below is the one place that combines shouldRelock and
+// excursionReturnRequiresRelock, and a test can drive it event by event
+// instead of only checking each predicate in isolation.
+export interface RelockState {
+  wasUnlocked: boolean;
+  excursion: boolean;
+  /** ms timestamp of a 'background' event excused by an open excursion, or null. */
+  excursionBackgroundedAt: number | null;
+}
+
+export const INITIAL_RELOCK_STATE: RelockState = {
+  wasUnlocked: false,
+  excursion: false,
+  excursionBackgroundedAt: null,
+};
+
+export interface RelockTransition {
+  state: RelockState;
+  /** Whether AuthContext should move an 'unlocked' session to 'locked' as a result of this event. */
+  relock: boolean;
+}
+
+// The full state transition an AppState 'change' event drives: this is what
+// AuthContext's listener calls on every event, and the only place that has to
+// get the two rules above right in combination rather than isolation.
+export function nextRelockState(state: RelockState, next: AppStateStatus, now: number): RelockTransition {
+  let { wasUnlocked, excursion, excursionBackgroundedAt } = state;
+  let relock = false;
+
+  if (next === 'background' && excursion) {
+    excursionBackgroundedAt = now;
+  }
+
+  if (shouldRelock({ next, wasUnlocked, excursion })) {
+    wasUnlocked = false;
+    relock = true;
+  }
+
+  if (next === 'active') {
+    excursion = false;
+    const backgroundedAt = excursionBackgroundedAt;
+    excursionBackgroundedAt = null;
+    // The background event that opened this excursion was excused on the
+    // assumption it would return promptly. If it didn't, this 'active' is the
+    // user reopening after Home, not the excursion completing.
+    if (wasUnlocked && excursionReturnRequiresRelock({ backgroundedAt, now })) {
+      wasUnlocked = false;
+      relock = true;
+    }
+  }
+
+  return { state: { wasUnlocked, excursion, excursionBackgroundedAt }, relock };
+}

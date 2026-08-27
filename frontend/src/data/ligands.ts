@@ -10,13 +10,16 @@ import type { Ligand } from '../types';
 // Cache-first (bonus VII.4): CCD entries are immutable reference data, so a hit
 // means no network at all — instant re-open, and it works in airplane mode.
 // `onProgress` (0..1) lets the caller show parse progress for large ligands —
-// see lib/cif.ts.
+// see lib/cif.ts. It is only passed to the network-fetched parse below: a
+// cache hit is a few KB read from disk, over before progress would mean
+// anything, and reporting it there too would make the caller's progress
+// state jump to 1 and then back down again if the cache turns out truncated.
 export async function loadLigand(id: string, onProgress?: ParseProgress): Promise<Ligand> {
   const code = normalizeLigandCode(id);
 
   const cached = await readCachedCif(code);
   if (cached) {
-    const ligand = await parseLigandCif(cached, code, onProgress);
+    const ligand = await parseLigandCif(cached, code);
     // A truncated entry (killed mid-write) must not brick this ligand forever:
     // fall through to the network and overwrite it.
     if (ligand.atoms.length > 0) return ligand;

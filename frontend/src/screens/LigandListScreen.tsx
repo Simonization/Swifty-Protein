@@ -42,11 +42,13 @@ const keyExtractor = (id: string) => id;
 
 // Tablets and landscape phones get two columns rather than one long stretched
 // row — the same width-awareness LigandViewScreen already has via useOrientation.
-// getItemLayout has to account for numColumns: every `numColumns` items share a
-// row, so the offset is keyed off the row index, not the item index.
-const getItemLayoutFor = (numColumns: number) => (_: ArrayLike<string> | null | undefined, index: number) => ({
+// FlatList already re-maps `index` to row-space when numColumns > 1 (its own
+// getItem/getItemCount divide by numColumns internally before this ever runs),
+// so `index` here is already the row index — dividing by numColumns again
+// would halve every offset past the first row.
+const getItemLayout = (_: ArrayLike<string> | null | undefined, index: number) => ({
   length: ROW_STRIDE,
-  offset: ROW_STRIDE * Math.floor(index / numColumns),
+  offset: ROW_STRIDE * index,
   index,
 });
 
@@ -54,7 +56,6 @@ export function LigandListScreen({ navigation }: Props) {
   const { logout } = useAuth();
   const { isWide } = useOrientation();
   const numColumns = isWide ? 2 : 1;
-  const getItemLayout = useMemo(() => getItemLayoutFor(numColumns), [numColumns]);
   const [query, setQuery] = useState('');
   const [pendingId, setPendingId] = useState<string | null>(null);
   // 0..1 while a large ligand is mid-parse (VII.4's progress indication);

@@ -13,7 +13,7 @@ import { ApiError } from '../api/client';
 import type { User } from '../api/auth';
 import { checkBiometricSupport, authenticateWithBiometrics, type BiometricCheck } from './biometrics';
 import { clearSession, loadSession, saveSession } from './storage';
-import { shouldRelock, excursionReturnRequiresRelock } from './lockPolicy';
+import { nextRelockState, INITIAL_RELOCK_STATE, type RelockState } from './lockPolicy';
 
 type Status = 'bootstrapping' | 'signedOut' | 'locked' | 'unlocked';
 
@@ -43,17 +43,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     token: null,
     biometrics: { available: false, label: 'Biometrics' },
   });
-  // Tracks whether the *current* session gate has ever been passed, so the
-  // AppState listener knows whether backgrounding should re-lock.
-  const wasUnlocked = useRef(false);
-  // Set while the app itself has deliberately handed control to another activity
-  // (the share chooser, the biometric prompt). See the AppState listener below.
-  const excursion = useRef(false);
-  // ms timestamp of the 'background' event that was excused by an open
-  // excursion, or null. Lets the 'active' handler tell "the excursion just
-  // finished" apart from "the user pressed Home during it and is only now
-  // reopening" — see excursionReturnRequiresRelock in ./lockPolicy.
-  const excursionBackgroundedAt = useRef<number | null>(null);
+  // Tracks whether the *current* session gate has ever been passed, whether an
+  // excursion (share sheet, biometric prompt) is open, and when a background
+  // event was last excused by one — the whole state the AppState listener
+  // needs. Gathered into one value, updated only through nextRelockState, so
+  // the full event sequence is what's tested (auth/lockPolicy.ts), not just
+  // the two predicates it combines in isolation.
+  const relockState = useRef<RelockState>({ ...INITIAL_RELOCK_STATE });
 
   useEffect(() => {
     let cancelled = false;
@@ -85,34 +81,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onChange = (next: AppStateStatus) => {
-      // A 'background' excused by an open excursion still needs to remember
-      // when it happened, so the 'active' handler below can tell a prompt
-      // return apart from "the user pressed Home during it".
-      if (next === 'background' && excursion.current) {
-        excursionBackgroundedAt.current = Date.now();
-      }
-      // The decision itself is in auth/lockPolicy, where it is unit-tested —
-      // this is the requirement the evaluation sheet checks by pressing Home
-      // and reopening the app.
-      if (shouldRelock({ next, wasUnlocked: wasUnlocked.current, excursion: excursion.current })) {
-        wasUnlocked.current = false;
+      // The decision itself is in auth/lockPolicy, where the full event
+      // sequence is unit-tested — this is the requirement the evaluation
+      // sheet checks by pressing Home and reopening the app.
+      const { state, relock } = nextRelockState(relockState.current, next, Date.now());
+      relockState.current = state;
+      if (relock) {
         setState((s) => (s.status === 'unlocked' ? { ...s, status: 'locked' } : s));
-      }
-      // Clear on the way back, not on the way out: 'background' can arrive after
-      // the excursion has already been marked finished on a slow device.
-      if (next === 'active') {
-        excursion.current = false;
-        const backgroundedAt = excursionBackgroundedAt.current;
-        excursionBackgroundedAt.current = null;
-        // That earlier 'background' was excused on the assumption it was the
-        // share sheet or biometric prompt returning promptly. If instead the
-        // app sat backgrounded well past how long that plausibly takes, this
-        // 'active' is the user reopening after Home — relock now, even though
-        // the background event itself went unchallenged at the time.
-        if (wasUnlocked.current && excursionReturnRequiresRelock({ backgroundedAt, now: Date.now() })) {
-          wasUnlocked.current = false;
-          setState((s) => (s.status === 'unlocked' ? { ...s, status: 'locked' } : s));
-        }
       }
     };
     const sub = AppState.addEventListener('change', onChange);
@@ -122,24 +97,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Wraps a call that hands the foreground to another activity we launched
   // ourselves, so returning from it does not read as the user leaving the app.
   const runWithoutRelock = useCallback(async <T,>(fn: () => Promise<T>): Promise<T> => {
-    excursion.current = true;
+    relockState.current.excursion = true;
     try {
       return await fn();
     } finally {
       // A late 'active' event clears this too; this is the fast path for the
       // case where the OS never actually backgrounded us (e.g. iOS sharing,
       // which is a same-process modal and never touches AppState). Short,
-      // because excursion.current staying true any longer than the native
-      // transition needs widens the window for an unrelated later
-      // backgrounding to be wrongly excused by a stale flag.
+      // because excursion staying true any longer than the native transition
+      // needs widens the window for an unrelated later backgrounding to be
+      // wrongly excused by a stale flag.
       setTimeout(() => {
-        excursion.current = false;
+        relockState.current.excursion = false;
       }, 500);
     }
   }, []);
 
   const unlock = useCallback((user: User, token: string) => {
-    wasUnlocked.current = true;
+    relockState.current.wasUnlocked = true;
     setState((s) => ({ ...s, status: 'unlocked', user, token }));
   }, []);
 
@@ -190,7 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await clearSession();
-    wasUnlocked.current = false;
+    relockState.current.wasUnlocked = false;
     setState((s) => ({ ...s, status: 'signedOut', user: null, token: null }));
   }, []);
 
