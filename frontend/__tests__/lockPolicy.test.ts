@@ -1,7 +1,7 @@
 // Mandatory VI.2's security rule, and the evaluation sheet's "Security" gate.
 // The corrector performs this by hand: log in, press Home, reopen the app, and
 // check the Login view is back.
-import { shouldRelock } from '../src/auth/lockPolicy';
+import { shouldRelock, excursionReturnRequiresRelock } from '../src/auth/lockPolicy';
 
 const inputs = (over: Partial<Parameters<typeof shouldRelock>[0]> = {}) => ({
   next: 'background' as const,
@@ -56,5 +56,30 @@ describe('shouldRelock', () => {
     for (const next of ['extension', 'unknown', ''] as unknown as ('background' | 'active')[]) {
       expect(shouldRelock(inputs({ next }))).toBe(false);
     }
+  });
+});
+
+// shouldRelock excuses a 'background' event the instant it arrives, using
+// whatever `excursion` is at that moment — it cannot know, later, whether the
+// user pressed Home *during* that excursion instead of letting it finish. This
+// is the other half of that decision, checked when the app returns to 'active'.
+describe('excursionReturnRequiresRelock', () => {
+  it('does not require relock for a prompt return, well inside the ceiling', () => {
+    expect(excursionReturnRequiresRelock({ backgroundedAt: 1_000, now: 1_000 + 3_000 })).toBe(false);
+  });
+
+  it('requires relock once the excursion outlasted how long a share sheet plausibly takes', () => {
+    // The exact case: the user pressed Home mid-share, wandered off, and only
+    // now reopened the app — the mandatory relock rule has to catch this.
+    expect(excursionReturnRequiresRelock({ backgroundedAt: 1_000, now: 1_000 + 30_000 })).toBe(true);
+  });
+
+  it('is a no-op when no background event was ever excused', () => {
+    expect(excursionReturnRequiresRelock({ backgroundedAt: null, now: 999_999 })).toBe(false);
+  });
+
+  it('respects a custom ceiling', () => {
+    expect(excursionReturnRequiresRelock({ backgroundedAt: 0, now: 2_000, maxMs: 1_000 })).toBe(true);
+    expect(excursionReturnRequiresRelock({ backgroundedAt: 0, now: 500, maxMs: 1_000 })).toBe(false);
   });
 });

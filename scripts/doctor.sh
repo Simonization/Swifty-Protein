@@ -124,6 +124,39 @@ fi
 printf "  No JDK or SDK? Build in the cloud instead — no local Android toolchain needed:\n"
 printf "    cd frontend && npx eas-cli build --platform android --profile preview\n"
 
+# --- OPTIONAL: the iOS route ('make ios', macOS only) -----------------------
+# Apple allows no equivalent of "build anywhere, install by hand" here — Xcode
+# is required to build for a real device, and Xcode only runs on macOS.
+printf "\n${BOLD}Optional (to build an iOS app with 'make ios' — macOS + Xcode only):${NC}\n"
+if [ "$OS" != "macos" ]; then
+  printf "  Not possible on this machine ($OS). Android is unaffected — use 'make apk' or 'make run'.\n"
+else
+  if command -v xcodebuild >/dev/null 2>&1 && xcodebuild -version >/dev/null 2>&1; then
+    ok "$(xcodebuild -version | head -1)"
+  else
+    warn "Xcode not found or not selected (Command Line Tools alone are not enough)"
+    printf "      → install Xcode from the App Store, then: sudo xcode-select -s /Applications/Xcode.app\n"
+  fi
+
+  if command -v pod >/dev/null 2>&1; then
+    ok "cocoapods $(pod --version 2>/dev/null)"
+  else
+    warn "CocoaPods not found (needed for iOS native dependencies): sudo gem install cocoapods"
+  fi
+
+  if command -v xcrun >/dev/null 2>&1; then
+    ios_n="$(xcrun xctrace list devices 2>&1 \
+      | awk '/^== Devices ==/{f=1;next} /^==/{f=0} f' \
+      | grep -v 'Simulator' \
+      | grep -cE '\([0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}\)$')"
+    if [ "${ios_n:-0}" -gt 0 ]; then ok "$ios_n iOS device(s) connected — 'make ios' can install directly"
+    else warn "no iOS device connected — plug in an iPhone/iPad and trust this computer"; fi
+  fi
+
+  printf "  No paid Apple Developer account? A free Apple ID installs to your own device from\n"
+  printf "  Xcode, re-signing roughly every 7 days — see 'make ios' for the exact flow.\n"
+fi
+
 # KVM speeds up an Android emulator on the host (jury may prefer a real device)
 printf "\n${BOLD}Optional (emulator instead of a real device):${NC}\n"
 if [ "$OS" = "linux" ]; then
@@ -136,7 +169,7 @@ fi
 # --- verdict ---------------------------------------------------------------
 printf "\n"
 if [ "$missing" -eq 0 ]; then
-  printf "${GREEN}${BOLD}All set.${NC} Run ${BOLD}make up${NC} for the backend, then ${BOLD}cd frontend && npx expo start${NC}.\n"
+  printf "${GREEN}${BOLD}All set.${NC} Run ${BOLD}make up${NC} for the backend, then ${BOLD}make run${NC} (auto-detects a connected phone), or ${BOLD}cd frontend && npx expo start${NC}.\n"
   exit 0
 else
   printf "${RED}${BOLD}%d required item(s) missing.${NC} Fix the ✗ lines above, then re-run ${BOLD}make doctor${NC}.\n" "$missing"

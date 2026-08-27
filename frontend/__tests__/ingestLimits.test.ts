@@ -28,19 +28,19 @@ function syntheticCif(atomCount: number): string {
 }
 
 describe('ingest -> render-limit integration', () => {
-  it('parses a ligand with exactly MAX_ATOMS atoms, and the render cap allows it', () => {
-    const lig = parseLigandCif(syntheticCif(MAX_ATOMS), 'BIG');
+  it('parses a ligand with exactly MAX_ATOMS atoms, and the render cap allows it', async () => {
+    const lig = await parseLigandCif(syntheticCif(MAX_ATOMS), 'BIG');
     expect(lig.atoms).toHaveLength(MAX_ATOMS);
     expect(exceedsRenderLimits(lig.atoms.length, lig.bonds.length)).toBe(false);
   });
 
-  it('parses a ligand one atom past MAX_ATOMS just fine -- parsing has no cap of its own', () => {
-    const lig = parseLigandCif(syntheticCif(MAX_ATOMS + 1), 'BIG');
+  it('parses a ligand one atom past MAX_ATOMS just fine -- parsing has no cap of its own', async () => {
+    const lig = await parseLigandCif(syntheticCif(MAX_ATOMS + 1), 'BIG');
     expect(lig.atoms).toHaveLength(MAX_ATOMS + 1);
   });
 
-  it('the render cap refuses that same ligand once parsed', () => {
-    const lig = parseLigandCif(syntheticCif(MAX_ATOMS + 1), 'BIG');
+  it('the render cap refuses that same ligand once parsed', async () => {
+    const lig = await parseLigandCif(syntheticCif(MAX_ATOMS + 1), 'BIG');
     expect(exceedsRenderLimits(lig.atoms.length, lig.bonds.length)).toBe(true);
   });
 });

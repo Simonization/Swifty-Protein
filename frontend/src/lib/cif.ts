@@ -9,12 +9,20 @@
 // Ported from the original Node backend module (verified against live RCSB data,
 // e.g. ATP -> 47 atoms / 49 bonds); the only behavioural addition is aromatic-bond
 // capture for the bonus interactions.
+//
+// parseLigandCif is async: it yields to the event loop periodically while
+// scanning loop_ rows and reports progress, so a large file doesn't tie up the
+// JS thread start-to-finish and the loading UI can show real progress on one.
 import type { Atom, Bond, Ligand } from '../types';
 
 interface Loop {
   headers: string[];
   rows: string[][];
 }
+
+// Reports parse progress as a 0..1 fraction. Called a handful of times per
+// file (see YIELD_EVERY), not per line — cheap enough to drive a UI label.
+export type ParseProgress = (fraction: number) => void;
 
 // Split a CIF line into tokens, respecting '...' and "..." quoting.
 function tokenize(line: string): string[] {
@@ -27,12 +35,32 @@ function tokenize(line: string): string[] {
   return tokens;
 }
 
-// Parse the document into single-value items and loop tables.
-function parseDocument(text: string): { singles: Record<string, string>; loops: Loop[] } {
+// Hands control back to the JS event loop. There is no real background thread
+// available for parsing here without a native module, so this is the practical
+// mitigation in an RN/Hermes runtime: periodic yields let the loading spinner
+// and any other queued UI work actually paint while a large file is parsed,
+// instead of one uninterrupted synchronous run tying up the JS thread.
+const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+// Every this many lines, yield once and report progress. Tokenizing loop_ rows
+// (regex-based, one per atom/bond) is the actual cost in a big CCD file — a
+// 2,000-atom / 4,000-bond ligand is ~6,000 lines, so this yields roughly two
+// dozen times: enough to keep the UI responsive without chattering.
+const YIELD_EVERY_LINES = 250;
+
+// Parse the document into single-value items and loop tables. Async only to
+// yield periodically during the loop_ row scan — everything here still runs on
+// the JS thread, just cooperatively.
+async function parseDocument(
+  text: string,
+  onProgress?: ParseProgress
+): Promise<{ singles: Record<string, string>; loops: Loop[] }> {
   const lines = text.split(/\r?\n/);
+  const totalLines = lines.length || 1;
   const singles: Record<string, string> = {};
   const loops: Loop[] = [];
   let i = 0;
+  let sinceYield = 0;
 
   while (i < lines.length) {
     const line = lines[i].trim();
@@ -55,6 +83,11 @@ function parseDocument(text: string): { singles: Record<string, string>; loops: 
         if (l === '' || l.startsWith('#') || l === 'loop_' || l.startsWith('_') || l.startsWith('data_')) break;
         rows.push(tokenize(l));
         i++;
+        if (++sinceYield >= YIELD_EVERY_LINES) {
+          sinceYield = 0;
+          onProgress?.(i / totalLines);
+          await yieldToEventLoop();
+        }
       }
       loops.push({ headers, rows });
       continue;
@@ -111,8 +144,11 @@ const isMissing = (v: string | undefined): boolean => v === undefined || v === '
 
 // Parse a ligand CIF into the Ligand shape.
 // `fallbackId` is used when the file omits _chem_comp.id (e.g. test fixtures).
-export function parseLigandCif(text: string, fallbackId?: string): Ligand {
-  const { singles, loops } = parseDocument(text);
+// Async so the loop_ row scan in parseDocument can yield to the event loop —
+// see YIELD_EVERY_LINES above. `onProgress` is optional and mostly meaningful
+// for large, real-world ligands; small fixtures just jump straight to 1.
+export async function parseLigandCif(text: string, fallbackId?: string, onProgress?: ParseProgress): Promise<Ligand> {
+  const { singles, loops } = await parseDocument(text, onProgress);
 
   const atomLoop = findLoop(loops, '_chem_comp_atom.') ?? loopFromSingles(singles, '_chem_comp_atom.');
   const bondLoop = findLoop(loops, '_chem_comp_bond.') ?? loopFromSingles(singles, '_chem_comp_bond.');
@@ -176,5 +212,6 @@ export function parseLigandCif(text: string, fallbackId?: string): Ligand {
   if (singles['_chem_comp.formula']) ligand.formula = singles['_chem_comp.formula'];
   ligand.atoms = atoms;
   ligand.bonds = bonds;
+  onProgress?.(1);
   return ligand;
 }

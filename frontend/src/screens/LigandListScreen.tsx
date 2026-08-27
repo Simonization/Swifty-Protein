@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, InteractionManager, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, FlatList, InteractionManager, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -10,6 +10,7 @@ import { SearchBar } from '../components/SearchBar';
 import { LoadingOverlay } from '../components/LoadingOverlay';
 import { colors, radii, spacing, typography } from '../theme/theme';
 import { useAuth } from '../auth/AuthContext';
+import { useOrientation } from '../hooks/useOrientation';
 import { LIGAND_IDS } from '../data/ligandIds';
 import { listCachedLigands, loadLigand, type CachedLigand } from '../data/ligands';
 import { readFavorites, writeFavorites } from '../data/favorites';
@@ -39,16 +40,26 @@ const ROW_STRIDE = ROW_HEIGHT + ROW_GAP;
 
 const keyExtractor = (id: string) => id;
 
-const getItemLayout = (_: ArrayLike<string> | null | undefined, index: number) => ({
+// Tablets and landscape phones get two columns rather than one long stretched
+// row — the same width-awareness LigandViewScreen already has via useOrientation.
+// getItemLayout has to account for numColumns: every `numColumns` items share a
+// row, so the offset is keyed off the row index, not the item index.
+const getItemLayoutFor = (numColumns: number) => (_: ArrayLike<string> | null | undefined, index: number) => ({
   length: ROW_STRIDE,
-  offset: ROW_STRIDE * index,
+  offset: ROW_STRIDE * Math.floor(index / numColumns),
   index,
 });
 
 export function LigandListScreen({ navigation }: Props) {
   const { logout } = useAuth();
+  const { isWide } = useOrientation();
+  const numColumns = isWide ? 2 : 1;
+  const getItemLayout = useMemo(() => getItemLayoutFor(numColumns), [numColumns]);
   const [query, setQuery] = useState('');
   const [pendingId, setPendingId] = useState<string | null>(null);
+  // 0..1 while a large ligand is mid-parse (VII.4's progress indication);
+  // stays null for the common case where parsing finishes before it matters.
+  const [parseProgress, setParseProgress] = useState<number | null>(null);
   // The re-entrancy guard has to be a ref: handleSelect is memoised so that rows
   // can be, and reading `pendingId` from its closure would be a render behind.
   const pendingRef = useRef<string | null>(null);
@@ -107,8 +118,9 @@ export function LigandListScreen({ navigation }: Props) {
       if (pendingRef.current) return; // one fetch at a time
       pendingRef.current = id;
       setPendingId(id);
+      setParseProgress(null);
       try {
-        const ligand = await loadLigand(id);
+        const ligand = await loadLigand(id, (fraction) => setParseProgress(fraction));
         navigation.navigate('LigandView', { ligand });
       } catch (err) {
         const [title, message] =
@@ -122,11 +134,13 @@ export function LigandListScreen({ navigation }: Props) {
         // first, then alert once the dismissal animation has run.
         pendingRef.current = null;
         setPendingId(null);
+        setParseProgress(null);
         InteractionManager.runAfterInteractions(() => Alert.alert(title, message));
         return;
       }
       pendingRef.current = null;
       setPendingId(null);
+      setParseProgress(null);
     },
     [navigation],
   );
@@ -192,7 +206,12 @@ export function LigandListScreen({ navigation }: Props) {
       </View>
 
       <FlatList
+        // FlatList cannot change numColumns on a live instance — remount via
+        // key when the device rotates or the width crosses the tablet breakpoint.
+        key={`cols-${numColumns}`}
         data={filtered}
+        numColumns={numColumns}
+        columnWrapperStyle={numColumns > 1 ? styles.columnWrapper : undefined}
         keyExtractor={keyExtractor}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
@@ -215,7 +234,14 @@ export function LigandListScreen({ navigation }: Props) {
         }
       />
 
-      <LoadingOverlay visible={!!pendingId} label={`Fetching ${pendingId}…`} />
+      <LoadingOverlay
+        visible={!!pendingId}
+        label={
+          parseProgress !== null && parseProgress < 1
+            ? `Parsing ${pendingId}… ${Math.round(parseProgress * 100)}%`
+            : `Fetching ${pendingId}…`
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -239,6 +265,15 @@ const LigandRow = memo(function LigandRow({
   onToggleFavorite: (id: string) => void;
 }) {
   const subtitle = info ? [info.name, info.formula].filter(Boolean).join(' · ') : null;
+  const starScale = useRef(new Animated.Value(1)).current;
+  const bounceStar = useCallback(() => {
+    starScale.setValue(1);
+    Animated.sequence([
+      Animated.timing(starScale, { toValue: 1.35, duration: 100, useNativeDriver: true }),
+      Animated.spring(starScale, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
+    onToggleFavorite(id);
+  }, [id, onToggleFavorite, starScale]);
   return (
     <Pressable
       onPress={() => onPress(id)}
@@ -265,18 +300,20 @@ const LigandRow = memo(function LigandRow({
         </View>
       ) : null}
       <Pressable
-        onPress={() => onToggleFavorite(id)}
+        onPress={bounceStar}
         hitSlop={10}
         accessibilityRole="button"
         accessibilityLabel={favorite ? `Remove ${id} from favorites` : `Add ${id} to favorites`}
         accessibilityState={{ selected: favorite }}
         style={styles.star}
       >
-        <MaterialCommunityIcons
-          name={favorite ? 'star' : 'star-outline'}
-          size={20}
-          color={favorite ? colors.primary : colors.textFaint}
-        />
+        <Animated.View style={{ transform: [{ scale: starScale }] }}>
+          <MaterialCommunityIcons
+            name={favorite ? 'star' : 'star-outline'}
+            size={20}
+            color={favorite ? colors.primary : colors.textFaint}
+          />
+        </Animated.View>
       </Pressable>
     </Pressable>
   );
@@ -344,7 +381,15 @@ const styles = StyleSheet.create({
   chipText: { ...typography.caption, color: colors.textMuted },
   chipTextActive: { color: colors.bg, fontWeight: '700' },
   listContent: { paddingHorizontal: spacing(6), paddingBottom: spacing(10) },
+  // Only applied when numColumns > 1 (see the FlatList prop above) — RN warns
+  // if columnWrapperStyle is set while numColumns is 1.
+  columnWrapper: { gap: spacing(3) },
   row: {
+    // flex: 1 matters once there is more than one column: without it, a
+    // multi-item row sizes each item to its content instead of splitting the
+    // row evenly. Harmless in the single-column case, where it already fills
+    // the available width.
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(3),

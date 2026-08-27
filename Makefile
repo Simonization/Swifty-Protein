@@ -8,7 +8,7 @@ COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compos
 
 .DEFAULT_GOAL := help
 
-.PHONY: help doctor test apk install up down logs clean
+.PHONY: help doctor test apk ios run devices install up down logs clean
 
 help: ## Show this help
 	@echo "Swifty-Proteins — available commands:"
@@ -16,7 +16,7 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[1m%-10s\033[0m %s\n", $$1, $$2}'
 	@echo
-	@echo "Typical jury flow:  make doctor  →  make up  →  make apk  (or: cd frontend && npx expo start)"
+	@echo "Typical jury flow:  make doctor  →  make up  →  make run  (auto-detects Android or iOS)"
 
 doctor: ## Check that required dependencies are installed
 	@bash scripts/doctor.sh
@@ -29,6 +29,15 @@ test: ## Run both test suites (backend + app), no Docker needed
 
 apk: ## Build the Android APK into dist/, then install it on a plugged-in phone
 	@bash scripts/apk.sh
+
+ios: ## Build the iOS app and install it on a connected iPhone/iPad (macOS + Xcode only)
+	@bash scripts/ios.sh
+
+run: ## Detect what's connected (Android or iOS) and build+install onto it — Mac+iOS→iOS, Mac/Linux/Windows+Android→Android
+	@bash scripts/run.sh
+
+devices: ## Show what's connected (Android via adb, iOS via Xcode) without building anything
+	@DETECT_ONLY=1 bash scripts/run.sh
 
 install: ## Install an already-built dist/app-release.apk on a plugged-in phone
 	@bash scripts/apk.sh --install-only

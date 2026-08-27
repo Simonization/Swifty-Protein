@@ -107,7 +107,7 @@ wrote it. The split above is who did the work, not who understands it.
 
 | Requirement | Why |
 |---|---|
-| **An Android phone** | It is a phone app; it cannot run inside Docker. |
+| **An Android or iOS phone** | It is a phone app; it cannot run inside Docker. iOS builds additionally need a Mac with Xcode — see *Getting the app onto a phone* below. |
 | **Docker + Compose v2** | Runs the backend API and its database. |
 | **Same network** | The phone calls the backend on this machine. |
 | **Internet access** | Molecule data comes from RCSB, live. |
@@ -134,7 +134,7 @@ it, which is fine for a test drive.
 Then get the app onto a phone, either way:
 
 ```bash
-make apk                          # build an APK and install it on a plugged-in phone
+make run                          # auto-detects a connected Android or iOS device and installs onto it
 cd frontend && npx expo start     # or run from source, scan the QR with Expo Go
 ```
 
@@ -157,7 +157,25 @@ a WebGL canvas. Login, search, all four view modes, tap-an-atom, measure and
 labels all work. What the browser cannot do is biometrics, sharing, and saving to
 a photo library; the session is also memory-only, so a reload signs you out.
 
-### Getting the APK onto a phone
+### Getting the app onto a phone
+
+`make run` detects what's plugged in and builds the right thing — Android
+anywhere, iOS only from a Mac (Apple requires Xcode to build for a real
+device; there is no way around that). It is `make apk` and `make ios` chosen
+automatically; run either directly if you already know which you want, or
+`make devices` to see what's detected without building anything.
+
+| This machine | Device connected | Result |
+|---|---|---|
+| macOS | iPhone/iPad | iOS build (`make ios`) |
+| macOS | Android | Android build (`make apk`) |
+| Linux / Windows | Android | Android build (`make apk`) |
+| Linux / Windows | iPhone/iPad | Not supported — no way to build for iOS without a Mac |
+
+If both an Android and an iOS device are attached at once, `make run` asks —
+pick with `TARGET=android` or `TARGET=ios`.
+
+#### Android
 
 `make apk` checks the toolchain before it builds anything, so a missing JDK is one
 line rather than a Gradle stack trace. It needs **JDK 17+** and an **Android SDK**;
@@ -185,6 +203,29 @@ Both routes produce a **debug-signed** APK: Expo's Android template signs the
 `release` build type with the debug keystore, and there is no release keystore in
 this repository. It installs and runs; it is simply not store-signed, which
 nothing here needs.
+
+#### iOS (macOS only)
+
+`make ios` needs **Xcode** (not just the Command Line Tools) and **CocoaPods**;
+`make doctor` checks both. It finds the one connected iPhone/iPad via Xcode's own
+device list and runs `expo run:ios`, which generates the native `ios/` project,
+installs pods, builds, and installs — the same thing a developer would do by hand,
+just preflighted so a missing dependency is a one-line message.
+
+```bash
+make ios
+```
+
+A free Apple ID is enough to install on your own device from Xcode — it just
+re-signs roughly every 7 days. If `expo run:ios` fails on signing, open the
+`.xcworkspace` under `frontend/ios` in Xcode once, and set your Apple ID as the
+team under the app target's *Signing & Capabilities*, then re-run `make ios`.
+
+Building in Expo's cloud instead is possible (`cd frontend && npx eas-cli build
+--platform ios --profile preview`), but — unlike Android — installing that build
+on a real device needs a **paid Apple Developer Program membership** to register
+the device; there is no free-account cloud path for iOS the way there is for
+Android. A Mac with Xcode and a free Apple ID is the more accessible route.
 
 Once the app is installed, point it at this machine: on the login screen, tap
 **"Can't connect? Set the server address"**, and enter the LAN IP, e.g.
@@ -320,7 +361,7 @@ Stated plainly, because they are what we would ask about:
 ```
 frontend/    the Expo app — screens, 3D viewer, CIF parser, element data, tests
 backend/     Fastify auth API — JWT, Argon2id, Postgres, tests
-scripts/     doctor / ensure-env / smoke / apk, called by the Makefile
+scripts/     doctor / ensure-env / smoke / apk / ios / run, called by the Makefile
 protein.md   the subject
 ```
 

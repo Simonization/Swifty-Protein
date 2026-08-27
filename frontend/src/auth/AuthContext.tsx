@@ -13,7 +13,7 @@ import { ApiError } from '../api/client';
 import type { User } from '../api/auth';
 import { checkBiometricSupport, authenticateWithBiometrics, type BiometricCheck } from './biometrics';
 import { clearSession, loadSession, saveSession } from './storage';
-import { shouldRelock } from './lockPolicy';
+import { shouldRelock, excursionReturnRequiresRelock } from './lockPolicy';
 
 type Status = 'bootstrapping' | 'signedOut' | 'locked' | 'unlocked';
 
@@ -49,6 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Set while the app itself has deliberately handed control to another activity
   // (the share chooser, the biometric prompt). See the AppState listener below.
   const excursion = useRef(false);
+  // ms timestamp of the 'background' event that was excused by an open
+  // excursion, or null. Lets the 'active' handler tell "the excursion just
+  // finished" apart from "the user pressed Home during it and is only now
+  // reopening" — see excursionReturnRequiresRelock in ./lockPolicy.
+  const excursionBackgroundedAt = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +85,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onChange = (next: AppStateStatus) => {
+      // A 'background' excused by an open excursion still needs to remember
+      // when it happened, so the 'active' handler below can tell a prompt
+      // return apart from "the user pressed Home during it".
+      if (next === 'background' && excursion.current) {
+        excursionBackgroundedAt.current = Date.now();
+      }
       // The decision itself is in auth/lockPolicy, where it is unit-tested —
       // this is the requirement the evaluation sheet checks by pressing Home
       // and reopening the app.
@@ -89,7 +100,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       // Clear on the way back, not on the way out: 'background' can arrive after
       // the excursion has already been marked finished on a slow device.
-      if (next === 'active') excursion.current = false;
+      if (next === 'active') {
+        excursion.current = false;
+        const backgroundedAt = excursionBackgroundedAt.current;
+        excursionBackgroundedAt.current = null;
+        // That earlier 'background' was excused on the assumption it was the
+        // share sheet or biometric prompt returning promptly. If instead the
+        // app sat backgrounded well past how long that plausibly takes, this
+        // 'active' is the user reopening after Home — relock now, even though
+        // the background event itself went unchallenged at the time.
+        if (wasUnlocked.current && excursionReturnRequiresRelock({ backgroundedAt, now: Date.now() })) {
+          wasUnlocked.current = false;
+          setState((s) => (s.status === 'unlocked' ? { ...s, status: 'locked' } : s));
+        }
+      }
     };
     const sub = AppState.addEventListener('change', onChange);
     return () => sub.remove();
@@ -103,10 +127,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await fn();
     } finally {
       // A late 'active' event clears this too; this is the fast path for the
-      // case where the OS never actually backgrounded us.
+      // case where the OS never actually backgrounded us (e.g. iOS sharing,
+      // which is a same-process modal and never touches AppState). Short,
+      // because excursion.current staying true any longer than the native
+      // transition needs widens the window for an unrelated later
+      // backgrounding to be wrongly excused by a stale flag.
       setTimeout(() => {
         excursion.current = false;
-      }, 1000);
+      }, 500);
     }
   }, []);
 
