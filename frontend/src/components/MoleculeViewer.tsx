@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { ErrorBanner } from './ErrorBanner';
+import { createWithWebGL2Context } from '../lib/glCompat';
 import { colors, spacing, typography } from '../theme/theme';
 import { elementFor } from '../data/elements';
 import {
@@ -604,7 +605,11 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       // Keep the invariant that matters: sizeRef is dp, whichever path set it.
       sizeRef.current = { width, height };
 
-      const renderer = new Renderer({ gl, width, height, pixelRatio, clearColor: colors.bg });
+      // See lib/glCompat: expo-gl's WebGL2 context trips three's WebGL1 guard.
+      const renderer = createWithWebGL2Context(
+        gl,
+        () => new Renderer({ gl, width, height, pixelRatio, clearColor: colors.bg }),
+      );
       rendererRef.current = renderer;
 
       const scene = new THREE.Scene();
