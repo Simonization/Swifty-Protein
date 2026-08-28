@@ -44,7 +44,7 @@ ensure_jwt_secret() {
 
 ensure_frontend_api_url() {
   local ip
-  ip="$(node scripts/lan-ip.js 2>/dev/null)" || {
+  ip="$(bash "$(dirname "${BASH_SOURCE[0]}")/lan-ip.sh" 2>/dev/null)" || {
     echo "!! could not detect a LAN IP (no network?) — leaving frontend/.env as-is" >&2
     return 0
   }
