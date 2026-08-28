@@ -7,6 +7,7 @@ import { File, Paths } from 'expo-file-system';
 
 import { DEFAULT_API_BASE_URL } from '../api/client';
 import { isViewMode } from '../data/viewModes';
+import type { ColorScheme } from '../theme/theme';
 import type { ViewMode } from '../components/MoleculeViewer';
 
 export interface Settings {
@@ -15,6 +16,10 @@ export interface Settings {
   apiBaseUrl: string;
   defaultMode: ViewMode;
   showLabelsByDefault: boolean;
+  // Bonus VII.2 "Dark Mode": which palette the whole app, including the 3D
+  // view's lighting, renders with. Defaults to 'dark' so an existing install
+  // that never opens Settings sees no visual change.
+  themeMode: ColorScheme;
   // Whether the first-run tour has been dismissed (bonus VII.2 onboarding).
   // Lives here rather than in its own file so there is one thing to clear.
   onboardingSeen: boolean;
@@ -24,10 +29,12 @@ export const DEFAULT_SETTINGS: Settings = {
   apiBaseUrl: DEFAULT_API_BASE_URL,
   defaultMode: 'ballStick',
   showLabelsByDefault: false,
+  themeMode: 'dark',
   onboardingSeen: false,
 };
 
 export const isValidApiUrl = (url: string): boolean => /^https?:\/\/\S+$/i.test(url.trim());
+const isColorScheme = (v: unknown): v is ColorScheme => v === 'light' || v === 'dark';
 
 const FILE_NAME = 'settings.json';
 
@@ -47,6 +54,7 @@ function coerce(raw: unknown): Settings {
       typeof value.showLabelsByDefault === 'boolean'
         ? value.showLabelsByDefault
         : DEFAULT_SETTINGS.showLabelsByDefault,
+    themeMode: isColorScheme(value.themeMode) ? value.themeMode : DEFAULT_SETTINGS.themeMode,
     onboardingSeen:
       typeof value.onboardingSeen === 'boolean'
         ? value.onboardingSeen

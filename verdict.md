@@ -108,31 +108,31 @@ passing, this section is live — worth confirming against a fresh `make test`
 before leaning on it at defence.
 
 ### VII.1 — Multiple Visualization Models
-Space-filling, wireframe, stick, ball-and-stick, switchable in real time without reloading the molecule. **IMPLEMENTED** — `viewModes.ts:17-22`; `MoleculeViewer.tsx:252-303` rewrites instance matrices/visibility in place, no remount.
+Space-filling, wireframe, stick, ball-and-stick, switchable in real time without reloading the molecule. **PASS** — `viewModes.ts:17-22`; `MoleculeViewer.tsx:252-303` rewrites instance matrices/visibility in place, no remount.
 
 ### VII.2 — Advanced User Interface
-- Custom list cells — **IMPLEMENTED**: `LigandRow` (`LigandListScreen.tsx:252-320`) shows an icon, name/formula subtitle, an "Offline" badge for cached ligands, and a favorite toggle — not a bare text row.
-- Smooth animations / micro-interactions — **IMPLEMENTED**, modestly: native-stack screen transitions, an animated splash orbit, a fade-in loading modal, an entrance fade+slide on `ErrorBanner` (`ErrorBanner.tsx:10-18`) so a new error reads as new information rather than a layout jump, and a scale-bounce on the favorite-star toggle (`LigandListScreen.tsx:268-276`). Not a claim of a full animation framework — a real, if modest, set of polish touches.
-- Dark mode — **NOT a togglable mode**. `theme.ts` is one fixed dark palette; `app.json:6` sets `"userInterfaceStyle": "dark"` app-wide. There is no light theme or toggle anywhere in the source. Don't claim this bonus.
-- Onboarding — **IMPLEMENTED**: `OnboardingScreen.tsx`, replayable from Settings.
-- Settings screen — **IMPLEMENTED**: `SettingsScreen.tsx` (backend URL, default view mode, default labels).
+- Custom list cells — **PASS**: `LigandRow` (`LigandListScreen.tsx:252-320`) shows an icon, name/formula subtitle, an "Offline" badge for cached ligands, and a favorite toggle — not a bare text row.
+- Smooth animations / micro-interactions — **PASS**, modestly: native-stack screen transitions, an animated splash orbit, a fade-in loading modal, an entrance fade+slide on `ErrorBanner` (`ErrorBanner.tsx:10-18`) so a new error reads as new information rather than a layout jump, and a scale-bounce on the favorite-star toggle (`LigandListScreen.tsx:268-276`). Not a claim of a full animation framework — a real, if modest, set of polish touches.
+- Dark mode — **FAIL**, not a togglable mode. `theme.ts` is one fixed dark palette; `app.json:6` sets `"userInterfaceStyle": "dark"` app-wide. There is no light theme or toggle anywhere in the source. Don't claim this bonus.
+- Onboarding — **PASS**: `OnboardingScreen.tsx`, replayable from Settings.
+- Settings screen — **PASS**: `SettingsScreen.tsx` (backend URL, default view mode, default labels).
 
 ### VII.3 — Enhanced Molecular Interactions
-Same-element atom highlighting, bond info (type/length) on tap, distance/angle measurement, toggleable atom labels, double-tap center-on-atom — **all IMPLEMENTED** in `MoleculeViewer.tsx`, each with a UI entry point in `LigandViewScreen.tsx`.
+Same-element atom highlighting, bond info (type/length) on tap, distance/angle measurement, toggleable atom labels, double-tap center-on-atom — **all PASS** in `MoleculeViewer.tsx`, each with a UI entry point in `LigandViewScreen.tsx`.
 
 ### VII.4 — Performance and Caching
-- Local caching — **IMPLEMENTED** (see general instruction #2 above).
+- Local caching — **PASS** (see general instruction #2 above).
 - Lazy loading of the ligand list — **PASS**: the list is virtualized (`FlatList` windowing, now multi-column-aware); the 1,243 bare ID strings held in memory upfront are a few KB, not the memory concern this bonus targets — the rendering-time laziness is what matters for "many items," and that's real.
-- Background parsing with progress indication — **IMPLEMENTED, with the tradeoff stated rather than hidden**: `parseLigandCif` yields to the event loop periodically (`cif.ts:49,86-90`) instead of running as one uninterrupted call, and reports progress that reaches the loading label (`LigandListScreen.tsx:239-243`). This is cooperative JS-thread yielding, not a literal OS background thread — impossible here without a native module, and documented as such in `cif.ts:14-18`.
-- Memory management / LOD — **IMPLEMENTED**: atom-count-tiered segment counts (`lodFor`, `moleculeGeometry.ts:31-35`) plus the disposal logic above.
-- 60 FPS guarantee — **instrumented, not yet verified**: a `__DEV__`-only FPS/draw-call overlay exists; nothing here guarantees 60 FPS, and it hasn't been measured on real hardware. Same open item as VI.4 #8.
+- Background parsing with progress indication — **PASS, with the tradeoff stated rather than hidden**: `parseLigandCif` yields to the event loop periodically (`cif.ts:49,86-90`) instead of running as one uninterrupted call, and reports progress that reaches the loading label (`LigandListScreen.tsx:239-243`). This is cooperative JS-thread yielding, not a literal OS background thread — impossible here without a native module, and documented as such in `cif.ts:14-18`.
+- Memory management / LOD — **PASS**: atom-count-tiered segment counts (`lodFor`, `moleculeGeometry.ts:31-35`) plus the disposal logic above.
+- 60 FPS guarantee — **PARTIAL**, instrumented but not yet verified: a `__DEV__`-only FPS/draw-call overlay exists; nothing here guarantees 60 FPS, and it hasn't been measured on real hardware. Same open item as VI.4 #8.
 
 ### VII.5 — Extended Sharing and Export
-- Custom share messages — **IMPLEMENTED**: `describeLigand` (`LigandViewScreen.tsx:36-40`) builds one message combining the ligand's id/name, molecular formula, and atom count, used as both the share sheet's dialog title (`:85`) and the Save-to-Photos confirmation (`:112`) — exactly what the subject asks for ("a custom message with the ligand name, number of atoms, and molecular formula"), not multiple message variants, which the subject doesn't require either.
-- Multiple export formats — **NOT IMPLEMENTED** (PNG snapshot only).
-- Video recording — **NOT IMPLEMENTED**.
-- Favorites system — **IMPLEMENTED**: `favorites.ts` + list screen star/filter.
-- Comparison view (side-by-side) — **NOT IMPLEMENTED**.
+- Custom share messages — **PASS**: `describeLigand` (`LigandViewScreen.tsx:36-40`) builds one message combining the ligand's id/name, molecular formula, and atom count, used as both the share sheet's dialog title (`:85`) and the Save-to-Photos confirmation (`:112`) — exactly what the subject asks for ("a custom message with the ligand name, number of atoms, and molecular formula"), not multiple message variants, which the subject doesn't require either.
+- Multiple export formats — **FAIL** (PNG snapshot only).
+- Video recording — **FAIL**.
+- Favorites system — **PASS**: `favorites.ts` + list screen star/filter.
+- Comparison view (side-by-side) — **FAIL**.
 
 ---
 

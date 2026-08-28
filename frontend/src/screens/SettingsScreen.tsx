@@ -4,7 +4,7 @@
 // at build time and defaults to localhost, which on a phone means the phone
 // itself. Being able to point the app at the evaluator's laptop at runtime is
 // what makes a build usable anywhere but the machine that produced it.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -23,7 +23,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TextField } from '../components/TextField';
 import { Button } from '../components/Button';
 import { MoleculeBackdrop } from '../components/MoleculeBackdrop';
-import { colors, radii, spacing, typography } from '../theme/theme';
+import { radii, spacing, typography, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { useSettings } from '../settings/SettingsContext';
 import { DEFAULT_SETTINGS, isValidApiUrl } from '../settings/settings';
 import { VIEW_MODES } from '../data/viewModes';
@@ -38,10 +39,13 @@ type Props =
 
 export function SettingsScreen({ navigation }: Props) {
   const { settings, save } = useSettings();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [apiBaseUrl, setApiBaseUrl] = useState(settings.apiBaseUrl);
   const [defaultMode, setDefaultMode] = useState<ViewMode>(settings.defaultMode);
   const [showLabelsByDefault, setShowLabels] = useState(settings.showLabelsByDefault);
+  const [darkMode, setDarkMode] = useState(settings.themeMode === 'dark');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -54,7 +58,7 @@ export function SettingsScreen({ navigation }: Props) {
     setError(null);
     setSaving(true);
     try {
-      await save({ apiBaseUrl: url, defaultMode, showLabelsByDefault });
+      await save({ apiBaseUrl: url, defaultMode, showLabelsByDefault, themeMode: darkMode ? 'dark' : 'light' });
       navigation.goBack();
     } catch {
       Alert.alert('Couldn’t save settings', 'Please try again.');
@@ -75,6 +79,7 @@ export function SettingsScreen({ navigation }: Props) {
     setApiBaseUrl(DEFAULT_SETTINGS.apiBaseUrl);
     setDefaultMode(DEFAULT_SETTINGS.defaultMode);
     setShowLabels(DEFAULT_SETTINGS.showLabelsByDefault);
+    setDarkMode(DEFAULT_SETTINGS.themeMode === 'dark');
     setError(null);
   };
 
@@ -125,6 +130,22 @@ export function SettingsScreen({ navigation }: Props) {
           Use the machine’s LAN IP, not localhost — on a phone, localhost is the phone.
         </Text>
 
+        <Text style={styles.sectionLabel}>Appearance</Text>
+        <View style={styles.switchRow}>
+          <View style={styles.switchText}>
+            <Text style={styles.fieldLabel}>Dark mode</Text>
+            <Text style={styles.hint}>Applies throughout the app, including the 3D view’s lighting.</Text>
+          </View>
+          <Switch
+            value={darkMode}
+            onValueChange={setDarkMode}
+            accessibilityLabel="Dark mode"
+            accessibilityHint="Switches the whole app, including the 3D view, between light and dark"
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.text}
+          />
+        </View>
+
         <Text style={styles.sectionLabel}>Viewer</Text>
         <Text style={styles.fieldLabel}>Default view mode</Text>
         <View style={styles.modeGrid}>
@@ -172,51 +193,52 @@ export function SettingsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(2),
-  },
-  iconButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  title: { ...typography.title, color: colors.text },
-  body: {
-    flexGrow: 1,
-    paddingHorizontal: spacing(6),
-    paddingTop: spacing(2),
-    paddingBottom: spacing(8),
-  },
-  sectionLabel: {
-    ...typography.label,
-    color: colors.primary,
-    textTransform: 'uppercase',
-    marginTop: spacing(4),
-    marginBottom: spacing(2),
-  },
-  fieldLabel: { ...typography.label, color: colors.text },
-  hint: { ...typography.caption, color: colors.textMuted, marginTop: spacing(1) },
-  modeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(2) },
-  modeChip: {
-    paddingVertical: spacing(2),
-    paddingHorizontal: spacing(3),
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  modeChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  modeLabel: { ...typography.caption, color: colors.textMuted },
-  modeLabelActive: { color: colors.bg, fontWeight: '700' },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing(4),
-    marginTop: spacing(5),
-  },
-  switchText: { flex: 1 },
-  actions: { marginTop: spacing(8), gap: spacing(3) },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    fill: { flex: 1, backgroundColor: colors.bg },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing(4),
+      paddingVertical: spacing(2),
+    },
+    iconButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+    title: { ...typography.title, color: colors.text },
+    body: {
+      flexGrow: 1,
+      paddingHorizontal: spacing(6),
+      paddingTop: spacing(2),
+      paddingBottom: spacing(8),
+    },
+    sectionLabel: {
+      ...typography.label,
+      color: colors.primary,
+      textTransform: 'uppercase',
+      marginTop: spacing(4),
+      marginBottom: spacing(2),
+    },
+    fieldLabel: { ...typography.label, color: colors.text },
+    hint: { ...typography.caption, color: colors.textMuted, marginTop: spacing(1) },
+    modeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2), marginTop: spacing(2) },
+    modeChip: {
+      paddingVertical: spacing(2),
+      paddingHorizontal: spacing(3),
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    modeChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    modeLabel: { ...typography.caption, color: colors.textMuted },
+    modeLabelActive: { color: colors.bg, fontWeight: '700' },
+    switchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing(4),
+      marginTop: spacing(5),
+    },
+    switchText: { flex: 1 },
+    actions: { marginTop: spacing(8), gap: spacing(3) },
+  });

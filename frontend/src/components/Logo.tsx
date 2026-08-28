@@ -1,9 +1,14 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { colors, spacing, typography } from '../theme/theme';
+import { spacing, typography, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 export function Logo({ size = 56 }: { size?: number }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <View style={styles.wrap} accessible accessibilityRole="header" accessibilityLabel="Swifty Protein — molecular structure visualizer">
       <View
@@ -18,16 +23,17 @@ export function Logo({ size = 56 }: { size?: number }) {
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', marginBottom: spacing(8) },
-  badge: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing(4),
-  },
-  wordmark: { ...typography.title, color: colors.text, letterSpacing: 2 },
-  tagline: { ...typography.caption, color: colors.textMuted, marginTop: spacing(1) },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    wrap: { alignItems: 'center', marginBottom: spacing(8) },
+    badge: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing(4),
+    },
+    wordmark: { ...typography.title, color: colors.text, letterSpacing: 2 },
+    tagline: { ...typography.caption, color: colors.textMuted, marginTop: spacing(1) },
+  });

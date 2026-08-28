@@ -1,18 +1,22 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View } from 'react-native';
 
-import { colors, gradients } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 // Faint "atoms + bonds" constellation, purely decorative, behind screen content.
-// Reuses a handful of CPK-ish hues so it visually rhymes with the 3D viewer to come.
-const NODES: { x: number; y: number; size: number; color: string }[] = [
-  { x: 0.08, y: 0.1, size: 10, color: colors.primary },
-  { x: 0.22, y: 0.22, size: 6, color: '#FFFFFF' },
-  { x: 0.85, y: 0.14, size: 8, color: colors.accent },
-  { x: 0.92, y: 0.32, size: 5, color: '#FF6B6B' },
-  { x: 0.1, y: 0.82, size: 7, color: colors.accent },
-  { x: 0.28, y: 0.92, size: 5, color: colors.primary },
-  { x: 0.88, y: 0.86, size: 9, color: '#FFFFFF' },
+// Reuses a handful of theme hues so it visually rhymes with the 3D viewer to
+// come, and stays legible in both palettes rather than hardcoding hex values
+// (a literal white dot would be invisible on the light background).
+type NodeRole = 'primary' | 'accent' | 'bright' | 'warn';
+
+const NODES: { x: number; y: number; size: number; role: NodeRole }[] = [
+  { x: 0.08, y: 0.1, size: 10, role: 'primary' },
+  { x: 0.22, y: 0.22, size: 6, role: 'bright' },
+  { x: 0.85, y: 0.14, size: 8, role: 'accent' },
+  { x: 0.92, y: 0.32, size: 5, role: 'warn' },
+  { x: 0.1, y: 0.82, size: 7, role: 'accent' },
+  { x: 0.28, y: 0.92, size: 5, role: 'primary' },
+  { x: 0.88, y: 0.86, size: 9, role: 'bright' },
 ];
 
 const BONDS: { x1: number; y1: number; x2: number; y2: number }[] = [
@@ -29,8 +33,15 @@ function angleDeg(dx: number, dy: number): number {
   return (Math.atan2(dy, dx) * 180) / Math.PI;
 }
 
-
 export function MoleculeBackdrop() {
+  const { colors, gradients } = useTheme();
+  const roleColor: Record<NodeRole, string> = {
+    primary: colors.primary,
+    accent: colors.accent,
+    bright: colors.text,
+    warn: colors.danger,
+  };
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <LinearGradient colors={gradients.background} style={StyleSheet.absoluteFill} />
@@ -63,7 +74,7 @@ export function MoleculeBackdrop() {
             width: n.size,
             height: n.size,
             borderRadius: n.size,
-            backgroundColor: n.color,
+            backgroundColor: roleColor[n.role],
             opacity: 0.35,
           }}
         />

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -7,7 +7,8 @@ import { Logo } from '../components/Logo';
 import { TextField } from '../components/TextField';
 import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { colors, spacing, typography } from '../theme/theme';
+import { spacing, typography, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { useAuth, describeAuthError } from '../auth/AuthContext';
 import { validatePassword, validateUsername } from '../auth/credentials';
 import type { AuthStackParamList } from '../navigation/types';
@@ -15,6 +16,8 @@ import type { AuthStackParamList } from '../navigation/types';
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
 export function RegisterScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { register } = useAuth();
 
   const [username, setUsername] = useState('');
@@ -74,9 +77,10 @@ export function RegisterScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  smallGap: { height: spacing(3) },
-  footerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing(2) },
-  footerText: { ...typography.body, color: colors.textMuted },
-  link: { ...typography.body, color: colors.primary, fontWeight: '700' },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    smallGap: { height: spacing(3) },
+    footerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing(2) },
+    footerText: { ...typography.body, color: colors.textMuted },
+    link: { ...typography.body, color: colors.primary, fontWeight: '700' },
+  });

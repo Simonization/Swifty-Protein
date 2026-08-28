@@ -8,7 +8,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { Button } from './Button';
-import { colors, spacing, typography } from '../theme/theme';
+import { spacing, typography, darkColors, type ThemeColors } from '../theme/theme';
+import { ThemeContext, type ThemeContextValue } from '../theme/ThemeContext';
 
 interface Props {
   children: ReactNode;
@@ -23,6 +24,16 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
+  // A class component can't call useTheme(), so it reads the same context
+  // directly — the one case in the app that needs the raw context object
+  // rather than the hook. No `declare context: ...` field: Expo's Metro/Babel
+  // pipeline strips Flow types without `allowDeclareFields`, so that field
+  // modifier is a build error there even though tsc and Jest (ts-jest/babel
+  // configured differently) both accept it — caught by actually running the
+  // app, not by either checker. Read via `this.context` and cast at the one
+  // call site instead.
+  static contextType = ThemeContext;
+
   state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
@@ -51,6 +62,12 @@ export class ErrorBoundary extends Component<Props, State> {
     const { error } = this.state;
     if (!error) return this.props.children;
 
+    // Falls back to the dark palette if somehow rendered outside a
+    // ThemeProvider — never actually happens (App.tsx always wraps it), but a
+    // boundary that could itself throw on a missing theme would defeat the point.
+    const colors = (this.context as ThemeContextValue | undefined)?.colors ?? darkColors;
+    const styles = makeStyles(colors);
+
     return (
       <View style={styles.root} accessible accessibilityRole="alert">
         <MaterialCommunityIcons
@@ -72,26 +89,27 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing(6),
-  },
-  title: { ...typography.title, color: colors.text, marginTop: spacing(4), textAlign: 'center' },
-  body: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing(2),
-  },
-  detail: {
-    ...typography.caption,
-    color: colors.danger,
-    textAlign: 'center',
-    marginTop: spacing(3),
-  },
-  gap: { height: spacing(6) },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing(6),
+    },
+    title: { ...typography.title, color: colors.text, marginTop: spacing(4), textAlign: 'center' },
+    body: {
+      ...typography.body,
+      color: colors.textMuted,
+      textAlign: 'center',
+      marginTop: spacing(2),
+    },
+    detail: {
+      ...typography.caption,
+      color: colors.danger,
+      textAlign: 'center',
+      marginTop: spacing(3),
+    },
+    gap: { height: spacing(6) },
+  });

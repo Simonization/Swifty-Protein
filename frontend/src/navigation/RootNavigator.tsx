@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { DarkTheme, NavigationContainer, type Theme as NavTheme } from '@react-navigation/native';
+import { useEffect, useMemo, useState } from 'react';
+import { DarkTheme, DefaultTheme, NavigationContainer, type Theme as NavTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { SplashScreen } from '../screens/SplashScreen';
@@ -9,18 +9,13 @@ import { RegisterScreen } from '../screens/RegisterScreen';
 import { LigandListScreen } from '../screens/LigandListScreen';
 import { LigandViewScreen } from '../screens/LigandViewScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
-import { colors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 import { useSettings } from '../settings/SettingsContext';
 import type { AuthStackParamList, AppStackParamList } from './types';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const AppStack = createNativeStackNavigator<AppStackParamList>();
-
-const navTheme: NavTheme = {
-  ...DarkTheme,
-  colors: { ...DarkTheme.colors, background: colors.bg, card: colors.bg, border: colors.border, primary: colors.primary },
-};
 
 // The subject asks for "at least 1-2 seconds" and the evaluation sheet for
 // "1 sec minimum". 1600ms sits inside both with room for a slow first render.
@@ -31,6 +26,7 @@ export function RootNavigator() {
   // Hold the splash until settings have loaded: the persisted server URL has to
   // reach the API client before any screen can try to log in.
   const { ready: settingsReady, settings, save } = useSettings();
+  const { scheme, colors } = useTheme();
   const [splashElapsed, setSplashElapsed] = useState(false);
 
   useEffect(() => {
@@ -39,6 +35,14 @@ export function RootNavigator() {
   }, []);
 
   const showSplash = status === 'bootstrapping' || !settingsReady || !splashElapsed;
+
+  const navTheme = useMemo<NavTheme>(() => {
+    const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: { ...base.colors, background: colors.bg, card: colors.bg, border: colors.border, primary: colors.primary },
+    };
+  }, [scheme, colors]);
 
   return (
     <NavigationContainer theme={navTheme}>

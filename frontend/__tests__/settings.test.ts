@@ -37,10 +37,25 @@ describe('readSettings / writeSettings', () => {
       apiBaseUrl: 'http://192.168.1.20:3000',
       defaultMode: 'spaceFilling' as const,
       showLabelsByDefault: true,
+      themeMode: 'light' as const,
       onboardingSeen: true,
     };
     await writeSettings(custom);
     expect(await readSettings()).toEqual(custom);
+  });
+
+  it('coerces a missing themeMode to dark, so an existing install sees no change', async () => {
+    new File(Paths.document, 'settings.json').write(
+      JSON.stringify({ apiBaseUrl: 'http://host:3000', defaultMode: 'stick', showLabelsByDefault: false })
+    );
+    expect((await readSettings()).themeMode).toBe('dark');
+  });
+
+  it('coerces an unrecognised themeMode back to the default', async () => {
+    new File(Paths.document, 'settings.json').write(
+      JSON.stringify({ apiBaseUrl: 'http://host:3000', defaultMode: 'stick', themeMode: 'sepia' })
+    );
+    expect((await readSettings()).themeMode).toBe(DEFAULT_SETTINGS.themeMode);
   });
 
   it('coerces a missing onboardingSeen to false, so the tour is offered once', async () => {

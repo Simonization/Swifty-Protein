@@ -1,8 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
+import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, gradients, radii, typography } from '../theme/theme';
+import { radii, typography, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 interface ButtonProps {
   label: string;
@@ -14,6 +16,8 @@ interface ButtonProps {
 }
 
 export function Button({ label, onPress, variant = 'primary', loading, disabled, icon }: ButtonProps) {
+  const { colors, gradients } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const isDisabled = disabled || loading;
 
   if (variant === 'ghost') {
@@ -57,24 +61,25 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled,
   );
 }
 
-const styles = StyleSheet.create({
-  content: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  primary: {
-    borderRadius: radii.pill,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryLabel: { ...typography.title, fontSize: 16, color: colors.bg },
-  ghost: {
-    borderRadius: radii.pill,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  ghostLabel: { ...typography.title, fontSize: 16, color: colors.text },
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.5 },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    content: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    primary: {
+      borderRadius: radii.pill,
+      paddingVertical: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    primaryLabel: { ...typography.title, fontSize: 16, color: colors.bg },
+    ghost: {
+      borderRadius: radii.pill,
+      paddingVertical: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    ghostLabel: { ...typography.title, fontSize: 16, color: colors.text },
+    pressed: { opacity: 0.85 },
+    disabled: { opacity: 0.5 },
+  });

@@ -3,23 +3,27 @@
 // Atom, bond and measurement are three shapes of one selection and can never be
 // on screen together, so they share one box in one position rather than three
 // stacked absolutely on top of each other.
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, radii, spacing, typography } from '../theme/theme';
+import { radii, spacing, typography, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { elementFor } from '../data/elements';
 import type { Selection } from './MoleculeViewer';
 
 const BOND_ORDER_LABEL: Record<1 | 2 | 3, string> = { 1: 'Single', 2: 'Double', 3: 'Triple' };
 
 export function SelectionTooltip({ selection }: { selection: Selection }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   if (selection.kind === 'atom') {
     const { atom } = selection;
     // The element table carries the full name and atomic number for all 118
     // elements; a symbol alone is what a debug readout shows.
     const el = elementFor(atom.element);
     return (
-      <Tooltip dotColor={`#${el.cpkHex}`}>
+      <Tooltip styles={styles} dotColor={`#${el.cpkHex}`}>
         <Text style={styles.heading}>
           {el.name} · {atom.element}
         </Text>
@@ -37,7 +41,7 @@ export function SelectionTooltip({ selection }: { selection: Selection }) {
   if (selection.kind === 'bond') {
     const { bond } = selection;
     return (
-      <Tooltip>
+      <Tooltip styles={styles}>
         <Text style={styles.heading}>
           {BOND_ORDER_LABEL[bond.order]} bond{bond.aromatic ? ' (aromatic)' : ''}
         </Text>
@@ -51,7 +55,7 @@ export function SelectionTooltip({ selection }: { selection: Selection }) {
   const { measurement } = selection;
   const pending = measurement.distance == null && measurement.angleDeg == null;
   return (
-    <Tooltip>
+    <Tooltip styles={styles}>
       <Text style={styles.heading}>{measurement.points.map((p) => p.element).join(' – ')}</Text>
       {measurement.distance != null && (
         <Text style={styles.detail}>Distance: {measurement.distance.toFixed(2)} Å</Text>
@@ -64,7 +68,15 @@ export function SelectionTooltip({ selection }: { selection: Selection }) {
   );
 }
 
-function Tooltip({ dotColor, children }: { dotColor?: string; children: ReactNode }) {
+function Tooltip({
+  dotColor,
+  children,
+  styles,
+}: {
+  dotColor?: string;
+  children: ReactNode;
+  styles: ReturnType<typeof makeStyles>;
+}) {
   return (
     // The selection is the viewer's only readout, and it changes without any
     // focus moving — announce it rather than waiting to be swiped to.
@@ -83,22 +95,23 @@ function Tooltip({ dotColor, children }: { dotColor?: string; children: ReactNod
   );
 }
 
-const styles = StyleSheet.create({
-  tooltip: {
-    position: 'absolute',
-    top: spacing(3),
-    left: spacing(3),
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(2),
-    backgroundColor: 'rgba(20, 27, 46, 0.92)',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    paddingVertical: spacing(2),
-    paddingHorizontal: spacing(3),
-  },
-  dot: { width: 14, height: 14, borderRadius: 7 },
-  heading: { ...typography.label, color: colors.text },
-  detail: { ...typography.caption, color: colors.textMuted, marginTop: 1 },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    tooltip: {
+      position: 'absolute',
+      top: spacing(3),
+      left: spacing(3),
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing(2),
+      backgroundColor: colors.tooltipBg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radii.md,
+      paddingVertical: spacing(2),
+      paddingHorizontal: spacing(3),
+    },
+    dot: { width: 14, height: 14, borderRadius: 7 },
+    heading: { ...typography.label, color: colors.text },
+    detail: { ...typography.caption, color: colors.textMuted, marginTop: 1 },
+  });

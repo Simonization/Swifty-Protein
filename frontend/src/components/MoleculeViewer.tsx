@@ -7,7 +7,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { ErrorBanner } from './ErrorBanner';
 import { createWithWebGL2Context } from '../lib/glCompat';
-import { colors, spacing, typography } from '../theme/theme';
+import { spacing, typography, type ThemeColors, type ColorScheme } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { elementFor } from '../data/elements';
 import {
   FOV_DEG,
@@ -25,6 +26,7 @@ import {
   lodFor,
   type HalfBondSpec,
 } from '../lib/moleculeGeometry';
+import { nextFpsGuardState, INITIAL_FPS_GUARD_STATE, type FpsGuardState } from '../lib/frameQuality';
 import type { Ligand } from '../types';
 
 export type ViewMode = 'ballStick' | 'spaceFilling' | 'wireframe' | 'stick';
@@ -86,6 +88,11 @@ interface MoleculeViewerProps {
   measureMode: boolean;
   onSelectionChange: (selection: Selection | null) => void;
   onTooLarge?: (info: TooLargeInfo) => void;
+  // Bonus VII.4 "60 FPS Guarantee": called at most once per mount, the moment
+  // the render loop decides frames have been chronically slow with labels on
+  // and turns them off by itself. The screen uses this to keep its own
+  // Labels toggle in sync with what's actually on screen — see frameQuality.ts.
+  onAutoDegrade?: () => void;
 }
 
 const MIN_ZOOM = 0.4;
@@ -96,6 +103,9 @@ const CENTER_ANIM_MS = 450;
 const HIGHLIGHT_EMISSIVE = 0x2a2a2a;
 const MEASURE_EMISSIVE = 0x5c4400;
 const MEASURE_LINE_COLOR = 0xffd54a;
+// How often the FPS guard samples (ms) — see lib/frameQuality.ts for the
+// strike-counting decision logic this feeds.
+const FPS_SAMPLE_MS = 1000;
 
 // A measurement is a distance (2 atoms) or an angle (3), so three overlay
 // spheres are all that can ever be lit at once -- see the measure slot pool in
@@ -121,6 +131,19 @@ const scratchMatrix = new THREE.Matrix4();
 const NO_ROTATION = new THREE.Quaternion();
 const CYLINDER_AXIS = new THREE.Vector3(0, 1, 0);
 
+// Bonus VII.2 "Dark Mode": the molecule's own material colours (CPK) never
+// change, but the lighting rig that makes them read as 3D rather than flat
+// does. A dark backdrop needs more directional punch to lift atoms off a
+// near-black canvas; a light backdrop already has plenty of ambient brightness
+// on its own, so the same intensities read as blown-out and flat instead —
+// exactly what the subject warns against ("avoid flat appearance"). The fill
+// light's tint also shifts: cool blue reads as "space" against the dark
+// canvas, and a neutral warm tint reads as "lab" against the light one.
+const LIGHTING: Record<ColorScheme, { ambient: number; keyColor: number; keyIntensity: number; fillColor: number; fillIntensity: number }> = {
+  dark: { ambient: 0.55, keyColor: 0xffffff, keyIntensity: 0.9, fillColor: 0x88bbff, fillIntensity: 0.4 },
+  light: { ambient: 0.42, keyColor: 0xffffff, keyIntensity: 0.75, fillColor: 0xfff2df, fillIntensity: 0.35 },
+};
+
 // One InstancedMesh per distinct element (atoms) / per distinct CPK colour
 // (bond halves). Grouping this way -- rather than one mesh for everything with
 // a per-instance colour attribute -- is what keeps same-element highlighting a
@@ -142,7 +165,9 @@ interface BondGroup {
 // with the PerspectiveCamera constructed below.
 
 export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerProps>(
-  function MoleculeViewer({ ligand, mode, showLabels, measureMode, onSelectionChange, onTooLarge }, ref) {
+  function MoleculeViewer({ ligand, mode, showLabels, measureMode, onSelectionChange, onTooLarge, onAutoDegrade }, ref) {
+    const { colors, scheme } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     const glViewRef = useRef<GLView>(null);
     // Layout dp, never physical pixels: gesture coordinates arrive in dp and the
     // label offsets below are dp. Written by onLayout, and once by
@@ -194,6 +219,9 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
     // applyMode is the only writer; everything else that needs the live mode
     // (measure overlay scaling, the label loop's atoms-hidden check) reads it.
     const modeRef = useRef<ViewMode>(mode);
+    // See lib/frameQuality.ts — sustained low FPS with labels on turns them
+    // off once, automatically, for the rest of this mount.
+    const fpsGuardRef = useRef<FpsGuardState>(INITIAL_FPS_GUARD_STATE);
 
     const [labelPositions, setLabelPositions] = useState<
       { id: number; x: number; y: number; symbol: string; color: string }[]
@@ -214,8 +242,8 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
     // gesture objects and the imperative handle below are therefore built once
     // and read anything volatile through this ref, so a label frame doesn't
     // rebuild the whole gesture tree.
-    const latest = useRef({ measureMode, onSelectionChange, onTooLarge });
-    latest.current = { measureMode, onSelectionChange, onTooLarge };
+    const latest = useRef({ measureMode, onSelectionChange, onTooLarge, onAutoDegrade });
+    latest.current = { measureMode, onSelectionChange, onTooLarge, onAutoDegrade };
 
     // Only on the counts, never on the (usually inline, so per-render new)
     // callback: depending on the callback identity would re-alert on every
@@ -616,11 +644,13 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
       const camera = new THREE.PerspectiveCamera(FOV_DEG, width / height, 0.1, 1000);
       cameraRef.current = camera;
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-      const key = new THREE.DirectionalLight(0xffffff, 0.9);
+      // Bonus VII.2: which rig depends on the active palette — see LIGHTING above.
+      const lighting = LIGHTING[scheme];
+      scene.add(new THREE.AmbientLight(0xffffff, lighting.ambient));
+      const key = new THREE.DirectionalLight(lighting.keyColor, lighting.keyIntensity);
       key.position.set(4, 6, 8);
       scene.add(key);
-      const fill = new THREE.DirectionalLight(0x88bbff, 0.4);
+      const fill = new THREE.DirectionalLight(lighting.fillColor, lighting.fillIntensity);
       fill.position.set(-6, -2, -4);
       scene.add(fill);
 
@@ -781,15 +811,27 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
         renderer.render(scene, camera);
         gl.endFrameEXP();
 
-        if (__DEV__) {
-          statFrames++;
-          const elapsed = Date.now() - statSince;
-          if (elapsed >= 1000) {
-            // renderer.info.render.calls is reset by each render() call, so this
-            // is the draw-call count of the frame just drawn.
-            setStats({ fps: Math.round((statFrames * 1000) / elapsed), calls: renderer.info.render.calls });
-            statFrames = 0;
-            statSince = Date.now();
+        statFrames++;
+        const elapsed = Date.now() - statSince;
+        if (elapsed >= FPS_SAMPLE_MS) {
+          // renderer.info.render.calls is reset by each render() call, so this
+          // is the draw-call count of the frame just drawn.
+          const fps = Math.round((statFrames * 1000) / elapsed);
+          if (__DEV__) setStats({ fps, calls: renderer.info.render.calls });
+          statFrames = 0;
+          statSince = Date.now();
+
+          // Bonus VII.4 "60 FPS Guarantee": runs in every build, not just dev —
+          // it protects real users on real devices, not just development. See
+          // lib/frameQuality.ts for why this needs sustained slowness, not one
+          // bad sample, and why it never re-triggers once it has acted.
+          const { state, shouldDegrade } = nextFpsGuardState(fpsGuardRef.current, fps, showLabelsRef.current);
+          fpsGuardRef.current = state;
+          if (shouldDegrade) {
+            showLabelsRef.current = false;
+            setLabelPositions([]);
+            labelsShown = false;
+            latest.current.onAutoDegrade?.();
           }
         }
 
@@ -885,7 +927,12 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
     }
 
     return (
-      <GestureDetector gesture={composed}>
+      // Keyed on scheme: initGl builds the lighting rig and clear colour once,
+      // on mount, from a closure over `colors`/`scheme` — a theme change while
+      // this screen happens to still be mounted (fast refresh; a future
+      // same-screen toggle) needs a fresh GL context, not a stale one relit
+      // from outside, and remounting is the simple way to guarantee that.
+      <GestureDetector gesture={composed} key={scheme}>
         <View style={styles.fill} onLayout={onLayout}>
           <GLView
             ref={glViewRef}
@@ -926,35 +973,36 @@ export const MoleculeViewer = forwardRef<MoleculeViewerHandle, MoleculeViewerPro
   }
 );
 
-const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: colors.bg },
-  fallback: { justifyContent: 'center', paddingHorizontal: spacing(4) },
-  glErrorOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    paddingHorizontal: spacing(4),
-  },
-  label: {
-    position: 'absolute',
-    fontSize: 11,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.9)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 3,
-  },
-  stats: {
-    position: 'absolute',
-    top: spacing(2),
-    left: spacing(2),
-    ...typography.caption,
-    color: colors.textFaint,
-    backgroundColor: 'rgba(10, 14, 23, 0.6)',
-    paddingHorizontal: spacing(2),
-    paddingVertical: spacing(0.5),
-    borderRadius: 4,
-  },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    fill: { flex: 1, backgroundColor: colors.bg },
+    fallback: { justifyContent: 'center', paddingHorizontal: spacing(4) },
+    glErrorOverlay: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      paddingHorizontal: spacing(4),
+    },
+    label: {
+      position: 'absolute',
+      fontSize: 11,
+      fontWeight: '700',
+      textShadowColor: 'rgba(0,0,0,0.9)',
+      textShadowOffset: { width: 0, height: 0 },
+      textShadowRadius: 3,
+    },
+    stats: {
+      position: 'absolute',
+      top: spacing(2),
+      left: spacing(2),
+      ...typography.caption,
+      color: colors.textFaint,
+      backgroundColor: colors.tooltipBg,
+      paddingHorizontal: spacing(2),
+      paddingVertical: spacing(0.5),
+      borderRadius: 4,
+    },
+  });

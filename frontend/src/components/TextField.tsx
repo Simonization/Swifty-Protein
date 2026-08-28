@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { colors, radii, spacing, typography } from '../theme/theme';
+import { radii, spacing, typography, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 interface TextFieldProps extends TextInputProps {
   label: string;
@@ -11,6 +12,8 @@ interface TextFieldProps extends TextInputProps {
 }
 
 export function TextField({ label, error, secure, style, ...inputProps }: TextFieldProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [hidden, setHidden] = useState(!!secure);
   const [focused, setFocused] = useState(false);
 
@@ -52,26 +55,27 @@ export function TextField({ label, error, secure, style, ...inputProps }: TextFi
   );
 }
 
-const styles = StyleSheet.create({
-  wrapper: { marginBottom: spacing(4) },
-  label: { ...typography.label, color: colors.textMuted, marginBottom: spacing(2), textTransform: 'uppercase' },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing(4),
-    gap: spacing(2),
-  },
-  inputRowFocused: { borderColor: colors.primary },
-  inputRowError: { borderColor: colors.danger },
-  input: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 16,
-    paddingVertical: spacing(3.5),
-  },
-  error: { ...typography.caption, color: colors.danger, marginTop: spacing(1.5) },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    wrapper: { marginBottom: spacing(4) },
+    label: { ...typography.label, color: colors.textMuted, marginBottom: spacing(2), textTransform: 'uppercase' },
+    inputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing(4),
+      gap: spacing(2),
+    },
+    inputRowFocused: { borderColor: colors.primary },
+    inputRowError: { borderColor: colors.danger },
+    input: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 16,
+      paddingVertical: spacing(3.5),
+    },
+    error: { ...typography.caption, color: colors.danger, marginTop: spacing(1.5) },
+  });

@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { colors, radii, spacing } from '../theme/theme';
+import { radii, spacing, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 interface SearchBarProps {
   value: string;
@@ -10,6 +12,9 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ value, onChangeText, placeholder = 'Search ligandsâ€¦' }: SearchBarProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <View style={styles.row}>
       <MaterialCommunityIcons name="magnify" size={20} color={colors.textMuted} importantForAccessibility="no" />
@@ -38,21 +43,22 @@ export function SearchBar({ value, onChangeText, placeholder = 'Search ligandsâ€
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(2),
-    backgroundColor: colors.surface,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing(4),
-  },
-  input: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 15,
-    paddingVertical: spacing(3),
-  },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing(2),
+      backgroundColor: colors.surface,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing(4),
+    },
+    input: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 15,
+      paddingVertical: spacing(3),
+    },
+  });

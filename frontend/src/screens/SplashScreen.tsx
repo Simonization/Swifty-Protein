@@ -1,11 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { Screen } from '../components/Screen';
-import { colors, spacing, typography } from '../theme/theme';
+import { spacing, typography, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 export function SplashScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const spin = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0.9)).current;
 
@@ -36,9 +39,10 @@ export function SplashScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  orbit: { marginBottom: spacing(6) },
-  wordmark: { ...typography.display, color: colors.text, letterSpacing: 3 },
-  tagline: { ...typography.caption, color: colors.textMuted, marginTop: spacing(2) },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    orbit: { marginBottom: spacing(6) },
+    wordmark: { ...typography.display, color: colors.text, letterSpacing: 3 },
+    tagline: { ...typography.caption, color: colors.textMuted, marginTop: spacing(2) },
+  });

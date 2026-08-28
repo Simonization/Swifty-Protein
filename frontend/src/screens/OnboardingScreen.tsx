@@ -4,14 +4,15 @@
 // `settings.onboardingSeen`. Three cards, because the app has exactly three
 // things a newcomer cannot guess: where the data comes from, that the 3D view
 // is touch-driven, and that opened ligands keep working offline.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../components/Button';
 import { MoleculeBackdrop } from '../components/MoleculeBackdrop';
-import { colors, radii, spacing, typography } from '../theme/theme';
+import { radii, spacing, typography, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 interface Card {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
@@ -38,6 +39,8 @@ const CARDS: Card[] = [
 ];
 
 export function OnboardingScreen({ onDone }: { onDone: () => void }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [index, setIndex] = useState(0);
   const card = CARDS[index];
   const last = index === CARDS.length - 1;
@@ -92,33 +95,34 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: colors.bg },
-  body: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing(7) },
-  iconWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: radii.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: spacing(7),
-  },
-  title: { ...typography.display, fontSize: 24, color: colors.text, textAlign: 'center' },
-  body_: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing(3),
-    lineHeight: 22,
-  },
-  dots: { flexDirection: 'row', gap: spacing(2), justifyContent: 'center', marginTop: spacing(8) },
-  dot: { width: 7, height: 7, borderRadius: radii.pill, backgroundColor: colors.border },
-  dotActive: { backgroundColor: colors.primary, width: 20 },
-  actions: { marginTop: spacing(8), gap: spacing(2) },
-  skip: { alignSelf: 'center', padding: spacing(3) },
-  skipText: { ...typography.body, color: colors.textMuted },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    fill: { flex: 1, backgroundColor: colors.bg },
+    body: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing(7) },
+    iconWrap: {
+      width: 88,
+      height: 88,
+      borderRadius: radii.lg,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      alignSelf: 'center',
+      marginBottom: spacing(7),
+    },
+    title: { ...typography.display, fontSize: 24, color: colors.text, textAlign: 'center' },
+    body_: {
+      ...typography.body,
+      color: colors.textMuted,
+      textAlign: 'center',
+      marginTop: spacing(3),
+      lineHeight: 22,
+    },
+    dots: { flexDirection: 'row', gap: spacing(2), justifyContent: 'center', marginTop: spacing(8) },
+    dot: { width: 7, height: 7, borderRadius: radii.pill, backgroundColor: colors.border },
+    dotActive: { backgroundColor: colors.primary, width: 20 },
+    actions: { marginTop: spacing(8), gap: spacing(2) },
+    skip: { alignSelf: 'center', padding: spacing(3) },
+    skipText: { ...typography.body, color: colors.textMuted },
+  });

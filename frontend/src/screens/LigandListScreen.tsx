@@ -8,7 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MoleculeBackdrop } from '../components/MoleculeBackdrop';
 import { SearchBar } from '../components/SearchBar';
 import { LoadingOverlay } from '../components/LoadingOverlay';
-import { colors, radii, spacing, typography } from '../theme/theme';
+import { radii, spacing, typography, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 import { useOrientation } from '../hooks/useOrientation';
 import { LIGAND_IDS } from '../data/ligandIds';
@@ -54,6 +55,8 @@ const getItemLayout = (_: ArrayLike<string> | null | undefined, index: number) =
 
 export function LigandListScreen({ navigation }: Props) {
   const { logout } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { isWide } = useOrientation();
   const numColumns = isWide ? 2 : 1;
   const [query, setQuery] = useState('');
@@ -265,6 +268,8 @@ const LigandRow = memo(function LigandRow({
   onPress: (id: string) => void;
   onToggleFavorite: (id: string) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const subtitle = info ? [info.name, info.formula].filter(Boolean).join(' · ') : null;
   const starScale = useRef(new Animated.Value(1)).current;
   const bounceStar = useCallback(() => {
@@ -331,6 +336,8 @@ function FilterChip({
   active: boolean;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <Pressable
       onPress={onPress}
@@ -352,82 +359,83 @@ function FilterChip({
   );
 }
 
-const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing(6),
-    paddingTop: spacing(4),
-    paddingBottom: spacing(3),
-  },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing(4) },
-  title: { ...typography.display, color: colors.text },
-  subtitle: { ...typography.caption, color: colors.textMuted, marginTop: spacing(1) },
-  searchWrap: { paddingHorizontal: spacing(6), marginBottom: spacing(3) },
-  filterRow: { flexDirection: 'row', gap: spacing(2), marginTop: spacing(3) },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(1),
-    paddingVertical: spacing(1.5),
-    paddingHorizontal: spacing(3),
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { ...typography.caption, color: colors.textMuted },
-  chipTextActive: { color: colors.bg, fontWeight: '700' },
-  listContent: { paddingHorizontal: spacing(6), paddingBottom: spacing(10) },
-  // Only applied when numColumns > 1 (see the FlatList prop above) — RN warns
-  // if columnWrapperStyle is set while numColumns is 1.
-  columnWrapper: { gap: spacing(3) },
-  row: {
-    // flex: 1 matters once there is more than one column: without it, a
-    // multi-item row sizes each item to its content instead of splitting the
-    // row evenly. Harmless in the single-column case, where it already fills
-    // the available width.
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    // Fixed, not padding-derived: getItemLayout above promises FlatList this
-    // exact height, and a cached row (which has a subtitle) would otherwise be
-    // taller than an uncached one.
-    height: ROW_HEIGHT,
-    paddingHorizontal: spacing(4),
-    marginBottom: ROW_GAP,
-  },
-  rowPressed: { opacity: 0.7 },
-  rowIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: radii.sm,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowText: { flex: 1 },
-  rowLabel: { ...typography.title, fontSize: 16, color: colors.text, letterSpacing: 1 },
-  rowSubtitle: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(1),
-    backgroundColor: 'rgba(52, 211, 153, 0.12)',
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing(2),
-    paddingVertical: 2,
-  },
-  badgeText: { ...typography.caption, fontSize: 10, color: colors.success },
-  star: { padding: spacing(1) },
-  empty: { paddingTop: spacing(12), alignItems: 'center' },
-  emptyText: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    fill: { flex: 1 },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing(6),
+      paddingTop: spacing(4),
+      paddingBottom: spacing(3),
+    },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing(4) },
+    title: { ...typography.display, color: colors.text },
+    subtitle: { ...typography.caption, color: colors.textMuted, marginTop: spacing(1) },
+    searchWrap: { paddingHorizontal: spacing(6), marginBottom: spacing(3) },
+    filterRow: { flexDirection: 'row', gap: spacing(2), marginTop: spacing(3) },
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing(1),
+      paddingVertical: spacing(1.5),
+      paddingHorizontal: spacing(3),
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    chipText: { ...typography.caption, color: colors.textMuted },
+    chipTextActive: { color: colors.bg, fontWeight: '700' },
+    listContent: { paddingHorizontal: spacing(6), paddingBottom: spacing(10) },
+    // Only applied when numColumns > 1 (see the FlatList prop above) — RN warns
+    // if columnWrapperStyle is set while numColumns is 1.
+    columnWrapper: { gap: spacing(3) },
+    row: {
+      // flex: 1 matters once there is more than one column: without it, a
+      // multi-item row sizes each item to its content instead of splitting the
+      // row evenly. Harmless in the single-column case, where it already fills
+      // the available width.
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing(3),
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radii.md,
+      // Fixed, not padding-derived: getItemLayout above promises FlatList this
+      // exact height, and a cached row (which has a subtitle) would otherwise be
+      // taller than an uncached one.
+      height: ROW_HEIGHT,
+      paddingHorizontal: spacing(4),
+      marginBottom: ROW_GAP,
+    },
+    rowPressed: { opacity: 0.7 },
+    rowIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: radii.sm,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rowText: { flex: 1 },
+    rowLabel: { ...typography.title, fontSize: 16, color: colors.text, letterSpacing: 1 },
+    rowSubtitle: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+    badge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing(1),
+      backgroundColor: colors.successBg,
+      borderRadius: radii.pill,
+      paddingHorizontal: spacing(2),
+      paddingVertical: 2,
+    },
+    badgeText: { ...typography.caption, fontSize: 10, color: colors.success },
+    star: { padding: spacing(1) },
+    empty: { paddingTop: spacing(12), alignItems: 'center' },
+    emptyText: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
+  });

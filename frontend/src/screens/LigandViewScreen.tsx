@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -13,7 +13,8 @@ import {
 } from '../components/MoleculeViewer';
 import { SelectionTooltip } from '../components/SelectionTooltip';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { colors, radii, spacing, typography } from '../theme/theme';
+import { radii, spacing, typography, type ThemeColors } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 import { VIEW_MODES } from '../data/viewModes';
 import {
   photoLibraryAvailable,
@@ -43,6 +44,8 @@ export function LigandViewScreen({ route, navigation }: Props) {
   const { ligand } = route.params;
   const { settings } = useSettings();
   const { runWithoutRelock } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { isLandscape } = useOrientation();
   const viewerRef = useRef<MoleculeViewerHandle>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -262,6 +265,17 @@ export function LigandViewScreen({ route, navigation }: Props) {
                 `This ligand has ${info.atoms} atoms and ${info.bonds} bonds, past the ${info.maxAtoms}/${info.maxBonds} limit this viewer can render.`
               )
             }
+            onAutoDegrade={() => {
+              // The viewer already turned labels off internally (bonus VII.4's
+              // 60 FPS guard) — this just keeps the Labels toggle button honest
+              // about it, and says why, once, rather than leaving the button lit
+              // while nothing it promises is actually on screen any more.
+              setShowLabels(false);
+              Alert.alert(
+                'Labels turned off',
+                'Atom labels were disabled automatically to keep the view smooth on this device. You can turn them back on from the Labels button.',
+              );
+            }}
           />
         </ErrorBoundary>
 
@@ -345,131 +359,135 @@ export function LigandViewScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(2),
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing(1) },
-  headerTitle: { flex: 1, alignItems: 'center' },
-  id: { ...typography.title, color: colors.text, letterSpacing: 1.5 },
-  name: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  modeRow: {
-    flexDirection: 'row',
-    gap: spacing(2),
-    paddingHorizontal: spacing(4),
-    marginBottom: spacing(2),
-  },
-  modeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing(1),
-    paddingVertical: spacing(2),
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  modeButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  modeLabel: { ...typography.caption, color: colors.textMuted, fontSize: 10 },
-  modeLabelActive: { color: colors.bg, fontWeight: '700' },
-  toolRow: {
-    flexDirection: 'row',
-    gap: spacing(2),
-    paddingHorizontal: spacing(4),
-    marginBottom: spacing(2),
-  },
-  toolButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(1),
-    paddingVertical: spacing(1.5),
-    paddingHorizontal: spacing(3),
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  toolButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  toolLabel: { ...typography.caption, color: colors.textMuted },
-  toolLabelActive: { color: colors.bg, fontWeight: '700' },
-  // Landscape: the two control rows share one line, so neither claims the full
-  // width and the viewer keeps the height it would otherwise lose.
-  controlsLandscape: { flexDirection: 'row', alignItems: 'center' },
-  modeRowLandscape: { flex: 1, marginBottom: 0, paddingRight: spacing(2) },
-  toolRowLandscape: { marginBottom: 0, paddingLeft: 0 },
-  viewerWrap: { flex: 1, marginHorizontal: spacing(4), borderRadius: radii.lg, overflow: 'hidden', position: 'relative' },
-  zoomColumn: {
-    position: 'absolute',
-    right: spacing(3),
-    top: spacing(3),
-    gap: spacing(2),
-  },
-  zoomButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(20, 27, 46, 0.85)',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  emptyMode: {
-    position: 'absolute',
-    left: spacing(6),
-    right: spacing(6),
-    top: '40%',
-    alignItems: 'center',
-  },
-  emptyModeText: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    backgroundColor: 'rgba(10, 14, 23, 0.85)',
-    borderRadius: radii.md,
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(3),
-  },
-  hint: {
-    position: 'absolute',
-    bottom: spacing(3),
-    alignSelf: 'center',
-    ...typography.caption,
-    color: colors.textFaint,
-    backgroundColor: 'rgba(10, 14, 23, 0.6)',
-    paddingHorizontal: spacing(3),
-    paddingVertical: spacing(1),
-    borderRadius: radii.pill,
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: spacing(3),
-    paddingHorizontal: spacing(4),
-    paddingVertical: spacing(4),
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    paddingVertical: spacing(3),
-    alignItems: 'center',
-  },
-  statValue: { ...typography.title, fontSize: 16, color: colors.primary },
-  statLabel: { ...typography.caption, color: colors.textMuted, marginTop: spacing(1) },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    fill: { flex: 1, backgroundColor: colors.bg },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing(4),
+      paddingVertical: spacing(2),
+    },
+    iconButton: {
+      width: 36,
+      height: 36,
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing(1) },
+    headerTitle: { flex: 1, alignItems: 'center' },
+    id: { ...typography.title, color: colors.text, letterSpacing: 1.5 },
+    name: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+    modeRow: {
+      flexDirection: 'row',
+      gap: spacing(2),
+      paddingHorizontal: spacing(4),
+      marginBottom: spacing(2),
+    },
+    modeButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing(1),
+      paddingVertical: spacing(2),
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    modeButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    modeLabel: { ...typography.caption, color: colors.textMuted, fontSize: 10 },
+    modeLabelActive: { color: colors.bg, fontWeight: '700' },
+    toolRow: {
+      flexDirection: 'row',
+      gap: spacing(2),
+      paddingHorizontal: spacing(4),
+      marginBottom: spacing(2),
+    },
+    toolButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing(1),
+      paddingVertical: spacing(1.5),
+      paddingHorizontal: spacing(3),
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    toolButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    toolLabel: { ...typography.caption, color: colors.textMuted },
+    toolLabelActive: { color: colors.bg, fontWeight: '700' },
+    // Landscape: the two control rows share one line, so neither claims the full
+    // width and the viewer keeps the height it would otherwise lose.
+    controlsLandscape: { flexDirection: 'row', alignItems: 'center' },
+    modeRowLandscape: { flex: 1, marginBottom: 0, paddingRight: spacing(2) },
+    toolRowLandscape: { marginBottom: 0, paddingLeft: 0 },
+    viewerWrap: { flex: 1, marginHorizontal: spacing(4), borderRadius: radii.lg, overflow: 'hidden', position: 'relative' },
+    zoomColumn: {
+      position: 'absolute',
+      right: spacing(3),
+      top: spacing(3),
+      gap: spacing(2),
+    },
+    zoomButton: {
+      width: 36,
+      height: 36,
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      // Same translucent panel treatment as the tooltip — always sits on top
+      // of the 3D canvas, so it needs to read against either palette's canvas
+      // background, not just one.
+      backgroundColor: colors.tooltipBg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    emptyMode: {
+      position: 'absolute',
+      left: spacing(6),
+      right: spacing(6),
+      top: '40%',
+      alignItems: 'center',
+    },
+    emptyModeText: {
+      ...typography.body,
+      color: colors.textMuted,
+      textAlign: 'center',
+      backgroundColor: colors.tooltipBg,
+      borderRadius: radii.md,
+      paddingHorizontal: spacing(4),
+      paddingVertical: spacing(3),
+    },
+    hint: {
+      position: 'absolute',
+      bottom: spacing(3),
+      alignSelf: 'center',
+      ...typography.caption,
+      color: colors.textFaint,
+      backgroundColor: colors.tooltipBg,
+      paddingHorizontal: spacing(3),
+      paddingVertical: spacing(1),
+      borderRadius: radii.pill,
+    },
+    footer: {
+      flexDirection: 'row',
+      gap: spacing(3),
+      paddingHorizontal: spacing(4),
+      paddingVertical: spacing(4),
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radii.md,
+      paddingVertical: spacing(3),
+      alignItems: 'center',
+    },
+    statValue: { ...typography.title, fontSize: 16, color: colors.primary },
+    statLabel: { ...typography.caption, color: colors.textMuted, marginTop: spacing(1) },
+  });
