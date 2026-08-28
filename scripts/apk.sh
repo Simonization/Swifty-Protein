@@ -194,6 +194,14 @@ if [ ! -d node_modules ]; then
   npm ci || die "npm ci failed."
 fi
 
+step "Pointing the build at this machine's backend"
+# EXPO_PUBLIC_API_URL is inlined into the JS bundle below (expo prebuild +
+# gradle run Metro, which loads frontend/.env automatically) — refreshing it
+# here means an APK built for "phone tethered to this machine" reaches the
+# backend without anyone opening Settings on the phone to type an IP in.
+# Safe to run even without `make up` first: it only touches frontend/.env.
+bash "$ROOT/scripts/ensure-env.sh" || warn "could not refresh frontend/.env — building with whatever it already has"
+
 step "Generating the native Android project (expo prebuild)"
 # The icon and the native launch screen are applied here — this step is exactly
 # why Expo Go shows Expo's branding and an APK shows ours.

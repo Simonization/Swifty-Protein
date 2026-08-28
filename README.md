@@ -227,11 +227,19 @@ on a real device needs a **paid Apple Developer Program membership** to register
 the device; there is no free-account cloud path for iOS the way there is for
 Android. A Mac with Xcode and a free Apple ID is the more accessible route.
 
-Once the app is installed, point it at this machine: on the login screen, tap
-**"Can't connect? Set the server address"**, and enter the LAN IP, e.g.
-`http://192.168.1.20:3000`. On a phone, `localhost` means *the phone*, so the
-built-in default will never reach the backend. The same screen is under
-**Settings** once you are logged in.
+You shouldn't need to do anything for this: `make apk` and `make ios` both run
+`scripts/ensure-env.sh` first, which detects this machine's current LAN IP and
+writes it into `frontend/.env` as `EXPO_PUBLIC_API_URL` — so a build made on
+this machine already points at it, for a phone tethered to the same network.
+If the network changes (different Wi-Fi, a new DHCP lease) between builds, the
+next `make apk` / `make ios` / `make up` picks up the new IP automatically.
+
+If you ever do need to point an already-installed app somewhere else — a
+different laptop, a different network — the login screen still has the manual
+override: tap **"Can't connect? Set the server address"**, and enter the LAN
+IP, e.g. `http://192.168.1.20:3000`. On a phone, `localhost` means *the phone*,
+so the built-in default will never reach the backend on its own. The same
+screen is under **Settings** once you are logged in.
 
 ## What to try
 

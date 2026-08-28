@@ -131,6 +131,11 @@ if [ ! -d node_modules ]; then
   npm ci || die "npm ci failed."
 fi
 
+step "Pointing the build at this machine's backend"
+# Same reasoning as apk.sh: bake this machine's current LAN IP into the build
+# so a phone tethered to it reaches the backend with no manual Settings step.
+bash "$ROOT/scripts/ensure-env.sh" || warn "could not refresh frontend/.env — building with whatever it already has"
+
 step "Building and installing (this generates ios/, runs pod install, and builds via Xcode)"
 printf "  First run downloads and compiles for several minutes.\n\n"
 

@@ -1,42 +1,68 @@
 #!/usr/bin/env bash
 #
-# ensure-env.sh — guarantee ./.env carries a JWT_SECRET before compose starts.
+# ensure-env.sh — two things `make up` needs in place before compose starts:
 #
-# The backend image runs with NODE_ENV=production, and config.js deliberately
-# refuses to boot on the dev fallback secret. Compose auto-loads ./.env from the
-# project directory, so generating a real random secret here is what lets
-# `make up` work with no setup — without baking a known secret into the repo and
-# quietly hollowing out that production guard.
+#   1. ./.env carries a JWT_SECRET (generated once, then left alone).
+#   2. frontend/.env's EXPO_PUBLIC_API_URL points at this machine's current
+#      LAN IP (refreshed on every run — unlike the secret, the IP can
+#      legitimately change between runs: different Wi-Fi, DHCP lease, etc.).
+#      This is what lets `make apk` / `make ios` produce a build that reaches
+#      the backend on a phone tethered to this machine's network, with
+#      nobody opening the app's Settings screen to type an IP in by hand.
 #
-# .env is gitignored. Re-running is a no-op.
+# Both are gitignored; re-running is safe either way.
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-if [ -f .env ] && grep -Eq '^JWT_SECRET=.+' .env; then
-  exit 0
-fi
+ensure_jwt_secret() {
+  if [ -f .env ] && grep -Eq '^JWT_SECRET=.+' .env; then
+    return 0
+  fi
 
-gen_secret() {
+  local secret
   if command -v openssl >/dev/null 2>&1; then
-    openssl rand -hex 32
+    secret="$(openssl rand -hex 32)"
   elif [ -r /dev/urandom ]; then
-    od -An -tx1 -N32 /dev/urandom | tr -d ' \n'
+    secret="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
   else
     echo "ensure-env.sh: need openssl or /dev/urandom to generate a secret" >&2
     exit 1
   fi
+
+  umask 077
+  # Start on a fresh line. Appending to a .env whose last line has no trailing
+  # newline would splice onto it ("FOO=barJWT_SECRET=..."), defining nothing --
+  # and the check above would miss it forever, appending again on every run.
+  if [ -s .env ] && [ -n "$(tail -c 1 .env)" ]; then
+    printf '\n' >> .env
+  fi
+  printf 'JWT_SECRET=%s\n' "$secret" >> .env
+  echo ">> generated a random JWT_SECRET into .env"
 }
 
-umask 077
+ensure_frontend_api_url() {
+  local ip
+  ip="$(node scripts/lan-ip.js 2>/dev/null)" || {
+    echo "!! could not detect a LAN IP (no network?) — leaving frontend/.env as-is" >&2
+    return 0
+  }
+  local url="http://${ip}:3000"
 
-# Start on a fresh line. Appending to a .env whose last line has no trailing
-# newline would splice onto it ("FOO=barJWT_SECRET=..."), defining nothing --
-# and the grep above would miss it forever, appending again on every run.
-if [ -s .env ] && [ -n "$(tail -c 1 .env)" ]; then
-  printf '\n' >> .env
-fi
+  [ -f frontend/.env ] || : > frontend/.env
 
-printf 'JWT_SECRET=%s\n' "$(gen_secret)" >> .env
-echo ">> generated a random JWT_SECRET into .env"
+  # Rewrite the EXPO_PUBLIC_API_URL line in place without sed -i, whose flag
+  # for "no backup suffix" differs between BSD (macOS) and GNU (Linux) --
+  # grep -v + append is the same on both.
+  local tmp
+  tmp="$(mktemp)"
+  grep -v '^EXPO_PUBLIC_API_URL=' frontend/.env > "$tmp" || true
+  printf 'EXPO_PUBLIC_API_URL=%s\n' "$url" >> "$tmp"
+  mv "$tmp" frontend/.env
+
+  echo ">> frontend/.env: EXPO_PUBLIC_API_URL=$url (this machine's current LAN IP)"
+}
+
+ensure_jwt_secret
+ensure_frontend_api_url
